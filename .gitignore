@@ -1,0 +1,36 @@
+# --- General ---
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+*.log
+*.tmp
+.idea/
+.vscode/
+
+# --- Environment Variables (Secrets) ---
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# --- Dependencies ---
+node_modules/
+/vendor/
+/build/
+/dist/
+.pnp
+.pnp.js
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+.venv/
+
+# --- OS Specific ---
+.DS_Store
+Thumbs.db
