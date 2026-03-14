@@ -1,4 +1,5 @@
 import * as vm from 'vm';
+import { logger } from './logger.js';
 
 /**
  * Executes dynamic Javascript code in a sandboxed V8 context
@@ -7,6 +8,7 @@ import * as vm from 'vm';
  * @returns The resolved result from the code execution
  */
 export async function executeSkill(code: string, args: Record<string, any> = {}): Promise<any> {
+    logger.info({ args }, 'Executing skill code');
     try {
         // The sandbox environment exposing safe globals
         const sandbox = {
@@ -45,10 +47,11 @@ export async function executeSkill(code: string, args: Record<string, any> = {})
         const script = new vm.Script(wrappedCode);
         await script.runInContext(context, { timeout: 10000 }); // 10s timeout
 
+        logger.info({ result: context.result }, 'Skill execution result');
         // We can also have skills assign to `result` 
         return context.result;
     } catch (error: any) {
-        console.error('Error executing skill code:', error);
+        logger.error({ error: error.message, stack: error.stack }, 'Error executing skill code');
         return `Error executing skill: ${error.message}`;
     }
 }

@@ -1,7 +1,8 @@
-import { Bot } from 'grammy';
+import { Bot, GrammyError, HttpError } from 'grammy';
 import * as dotenv from 'dotenv';
 import { getChatHistory, saveChatMessage } from './services/db.js';
 import { processChat, SYSTEM_PROMPT } from './services/ai.js';
+import { logger } from './services/logger.js';
 
 dotenv.config();
 
@@ -12,6 +13,36 @@ if (!token) {
 
 export const bot = new Bot(token);
 
+// Global error handler for the bot
+bot.catch((err) => {
+    const ctx = err.ctx;
+    logger.error({ 
+        err: err.error, 
+        update_id: ctx.update.update_id,
+        chat_id: ctx.chat?.id
+    }, `Error while handling update ${ctx.update.update_id}:`);
+    
+    const e = err.error;
+    if (e instanceof GrammyError) {
+        logger.error({ description: e.description }, 'Error in request:');
+    } else if (e instanceof HttpError) {
+        logger.error({ error: e }, 'Could not contact Telegram:');
+    } else {
+        logger.error({ error: e }, 'Unknown error:');
+    }
+});
+
+// Global process error handlers
+process.on('unhandledRejection', (reason, promise) => {
+    logger.error({ reason, promise }, 'Unhandled Rejection at Promise');
+});
+
+process.on('uncaughtException', (error) => {
+    logger.error({ error: error.message, stack: error.stack }, 'Uncaught Exception thrown');
+    // For Vercel, it's often better to let it crash and restart, but we log first
+    // process.exit(1); 
+});
+
 bot.command('start', (ctx) => {
     ctx.reply('Hello! I am an AI Telegram bot. I act like an autonomous agent capable of writing and executing my own Javascript skills dynamically. Ask me anything, or ask me to build a skill for you!');
 });
@@ -19,6 +50,8 @@ bot.command('start', (ctx) => {
 bot.on('message:text', async (ctx) => {
     const chatId = ctx.chat.id;
     const userText = ctx.message.text;
+
+    logger.info({ chatId, userText }, 'Received message');
 
     // Save user's message
     await saveChatMessage({
@@ -52,7 +85,7 @@ bot.on('message:text', async (ctx) => {
 
         await ctx.reply(aiResponse);
     } catch (error: any) {
-        console.error('Error generating AI response:', error);
+        logger.error({ error: error.message, stack: error.stack, chatId }, 'Error generating AI response');
         await ctx.reply('Sorry, I encountered an error computing your request.');
     }
 });

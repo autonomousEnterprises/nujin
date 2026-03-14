@@ -1,9 +1,10 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { webhookCallback } from 'grammy';
 import { bot } from '../src/bot.js';
+import { logger } from '../src/services/logger.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-    console.log('Webhook received request:', req.method);
+    logger.info({ method: req.method, url: req.url }, 'Webhook received request');
     
     // Allow a simple GET request to check if the endpoint is up
     if (req.method === 'GET') {
@@ -28,7 +29,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         return await handleUpdate(req as any, res as any);
     } catch (error: any) {
-        console.error('Error in webhook handler:', error);
+        logger.error({ 
+            error: error.message, 
+            stack: error.stack,
+            method: req.method,
+            headers: req.headers,
+            body: req.body
+        }, 'Error in webhook handler');
         return res.status(500).json({ error: error.message });
     }
 }
