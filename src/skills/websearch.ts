@@ -1,4 +1,5 @@
 import type { BuiltinSkill } from './types.js';
+import * as cheerio from 'cheerio';
 
 export const websearchSkill: BuiltinSkill = {
     name: 'web_search',
@@ -12,37 +13,53 @@ export const websearchSkill: BuiltinSkill = {
     },
     execute: async ({ query }) => {
         try {
-            // Using DuckDuckGo Lite as a free, no-API-key search alternative for demo purposes.
-            // In production, consider using a proper Search API like Google Custom Search, Bing, or SerpApi.
+            // Using DuckDuckGo Lite as a free, no-API-key search alternative.
             const response = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`, {
                 headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+                    'Accept-Language': 'en-US,en;q=0.5',
                 }
             });
 
             if (!response.ok) {
-                return `Failed to fetch search results. Status: ${response.status}`;
+                return `Failed to fetch search results. Status: ${response.status} ${response.statusText}`;
             }
 
             const html = await response.text();
-
-            // Simple regex extraction since we can't easily use cheerio here without importing it
-            // but let's assume we can use cheerio if it's available, however, DDG HTML structure changes.
-            // We will extract basic text from the result bodies
+            const $ = cheerio.load(html);
+            
             const results: string[] = [];
-            const resultRegex = /<a class="result__snippet[^>]*>(.*?)<\/a>/gi;
-            let match;
-            let count = 0;
+            
+            // DuckDuckGo Lite HTML structure usually has results in .result-body or similar
+            // We search for snippets within the results
+            $('.result__snippet').each((i, el) => {
+                if (i < 5) {
+                    const text = $(el).text().trim();
+                    if (text) {
+                        results.push(`- ${text}`);
+                    }
+                }
+            });
 
-            while ((match = resultRegex.exec(html)) !== null && count < 5) {
-                // Strip HTML tags from inner snippet
-                const text = (match[1] || '').replace(/<[^>]*>?/gm, '');
-                results.push(`- ${text.trim()}`);
-                count++;
+            // Fallback if the above selector fails (DDG sometimes changes classes)
+            if (results.length === 0) {
+                 $('.web-result').each((i, el) => {
+                    if (i < 5) {
+                        const snippet = $(el).find('.result__snippet').text().trim() || $(el).text().trim();
+                        if (snippet) {
+                            results.push(`- ${snippet}`);
+                        }
+                    }
+                });
             }
 
             if (results.length === 0) {
-                return "No results found or rate limited by search provider.";
+                // If we still have no results, it might be rate limiting or a major layout change
+                if (html.includes('ddg-laptcha')) {
+                    return "Search blocked by bot detection (Captcha encountered).";
+                }
+                return "No results found. The search provider might be rate-limiting or has changed its layout.";
             }
 
             return `Top search results for "${query}":\n` + results.join('\n');

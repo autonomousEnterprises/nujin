@@ -66,7 +66,7 @@ export async function processChat(messages: any[], chatId: number): Promise<stri
             type: 'function',
             function: {
                 name: `builtin_${skill.name}`,
-                description: `Built-in skill: ${skill.description}`,
+                description: `CRITICAL BUILT-IN SKILL: ${skill.description}. USE THIS for any real-time information, news, or general knowledge search.`,
                 parameters: skill.parameters
             }
         });
