@@ -16,12 +16,12 @@ export const bot = new Bot(token);
 // Global error handler for the bot
 bot.catch((err) => {
     const ctx = err.ctx;
-    logger.error({ 
-        err: err.error, 
+    logger.error({
+        err: err.error,
         update_id: ctx.update.update_id,
         chat_id: ctx.chat?.id
     }, `Error while handling update ${ctx.update.update_id}:`);
-    
+
     const e = err.error;
     if (e instanceof GrammyError) {
         logger.error({ description: e.description }, 'Error in request:');
@@ -44,7 +44,7 @@ process.on('uncaughtException', (error) => {
 });
 
 bot.command('start', (ctx) => {
-    ctx.reply('Hello! I am an AI Telegram bot. I act like an autonomous agent capable of writing and executing my own Javascript skills dynamically. Ask me anything, or ask me to build a skill for you!');
+    ctx.reply("Hi, I am Nujin, the world's first autonomous onchain AI dedicated to your sovereignty.\n\nI'm designed to generate your living while you enjoy yours. I can build my own tools, interact with the blockchain, and proactively pursue your financial goals.\n\nWhat's your financial goal?");
 });
 
 bot.on('message:text', async (ctx) => {
