@@ -5,21 +5,21 @@ A serverless Telegram Bot built with Grammy and Vercel. It acts as an autonomous
 ## Setup
 
 1. **Install dependencies:**
-   \`\`\`bash
+   ```bash
    npm install
-   \`\`\`
+   ```
 
 2. **Environment Variables:**
    Create a \`.env\` file in the root with:
-   \`\`\`env
+   ```env
    TELEGRAM_BOT_TOKEN=your_telegram_bot_token
    SUPABASE_URL=your_supabase_url
    SUPABASE_KEY=your_supabase_anon_key
    OPENAI_API_KEY=your_openai_api_key
-   \`\`\`
+   ```
 
 3. **Database Schema:**
-   Run the SQL scripts located in the implementation plan to create \`chat_history\` and \`bot_skills\` in your Supabase project.
+   Run the SQL script `supabase_setup.sql` in your Supabase SQL Editor to create the `chat_history` and `bot_skills` tables.
 
 ## Deployment to Vercel
 
@@ -32,11 +32,11 @@ A serverless Telegram Bot built with Grammy and Vercel. It acts as an autonomous
 
 To connect Telegram to your newly deployed Vercel function, run:
 
-\`\`\`bash
+```bash
 curl "https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/setWebhook?url=<YOUR_VERCEL_APP_URL>/api/webhook"
-\`\`\`
+```
 
-Replace \`<TELEGRAM_BOT_TOKEN>\` and \`<YOUR_VERCEL_APP_URL>\` with your specific values.
+Replace `<TELEGRAM_BOT_TOKEN>` and `<YOUR_VERCEL_APP_URL>` with your specific values.
 
 ## Usage
 Chat with your bot on Telegram! For example, ask it to:
