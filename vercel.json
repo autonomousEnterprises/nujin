@@ -13,6 +13,10 @@
       "dest": "api/webhook.ts"
     },
     {
+      "src": "/logo.png",
+      "dest": "/logo.png"
+    },
+    {
       "src": "/(.*)",
       "dest": "/index.html"
     }

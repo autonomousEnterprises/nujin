@@ -7,7 +7,7 @@
   "type": "module",
   "main": "index.js",
   "scripts": {
-    "build": "tsc && cp -r public dist/",
+    "build": "tsc && cp -r public/. dist/",
     "start": "node dist/src/bot.js",
     "dev": "ts-node src/bot.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
