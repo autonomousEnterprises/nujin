@@ -9,7 +9,6 @@ const openai = new OpenAI({
 
 export const SYSTEM_PROMPT = `
 You are an AI Telegram bot that can write and execute its own skills dynamically. 
-You act very much like OpenClaw - a serverless AI agent.
 When a user asks you to do something you don't know how to do, you can use the create_skill function to write a Javascript snippet that achieves it. 
 This skill will be saved in your database and you can use it in the future.
 All skills run in a sandboxed Node.js VM context with access to fetch and console.
@@ -74,7 +73,7 @@ export async function processChat(messages: any[], chatId: number): Promise<stri
     }
 
     const response = await openai.chat.completions.create({
-        model: 'gpt-4o',
+        model: 'gpt-4o-mini',
         messages,
         tools,
         tool_choice: 'auto'
