@@ -20,7 +20,7 @@ You also have built-in skills available for common tasks.
 
 export async function processChat(messages: any[], chatId: number): Promise<string> {
     logger.info({ chatId, messageCount: messages.length }, 'Processing chat');
-    
+
     // Load dynamic skills and map them to OpenAI function definitions
     const dynamicSkills = await getSkills();
 
@@ -41,7 +41,6 @@ export async function processChat(messages: any[], chatId: number): Promise<stri
                 }
             }
         },
-        { type: "web_search" }
     ];
 
     // Expose existing dynamic skills
@@ -90,7 +89,7 @@ export async function processChat(messages: any[], chatId: number): Promise<stri
         if (message.tool_calls && message.tool_calls.length > 0) {
             const toolCall = message.tool_calls[0] as any;
             const args = JSON.parse(toolCall.function.arguments || '{}');
-            
+
             logger.info({ toolName: toolCall.function.name, args, chatId }, 'Tool call detected');
 
             if (toolCall.function.name === 'create_skill') {
@@ -123,7 +122,7 @@ export async function processChat(messages: any[], chatId: number): Promise<stri
                 } else {
                     executionResult = `Skill ${skillName} not found.`;
                 }
-                
+
                 logger.info({ skillName, success: !!skill, chatId }, 'Skill execution completed');
 
                 messages.push(message);
