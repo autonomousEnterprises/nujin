@@ -4,13 +4,20 @@ A serverless Telegram Bot built with Grammy and Vercel. It acts as an autonomous
 
 ## Setup
 
-1. **Install dependencies:**
+1. **Telegram Bot Setup:**
+   - Open Telegram and search for [@BotFather](https://t.me/botfather).
+   - Send `/newbot` and follow the instructions to create a new bot.
+   - Once created, copy the **API Token** provided.
+   - (Optional) Send `/setprivacy` to `@BotFather`, select your bot, and set it to **Disabled** if you want the bot to receive all group messages.
+
+2. **Install dependencies:**
    ```bash
    npm install
    ```
 
-2. **Environment Variables:**
-   Create a \`.env\` file in the root with:
+3. **Environment Variables:**
+   Create a `.env` file in the root with:
+   
    ```env
    TELEGRAM_BOT_TOKEN=your_telegram_bot_token
    SUPABASE_URL=your_supabase_url
@@ -18,7 +25,7 @@ A serverless Telegram Bot built with Grammy and Vercel. It acts as an autonomous
    OPENAI_API_KEY=your_openai_api_key
    ```
 
-3. **Database Schema:**
+4. **Database Schema:**
    Run the SQL script `supabase_setup.sql` in your Supabase SQL Editor to create the `chat_history` and `bot_skills` tables.
 
 ## Deployment to Vercel
