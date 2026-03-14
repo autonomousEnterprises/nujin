@@ -6,7 +6,9 @@ import { processChat, SYSTEM_PROMPT } from './services/ai.js';
 dotenv.config();
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
-if (!token) throw new Error('TELEGRAM_BOT_TOKEN is required');
+if (!token) {
+    throw new Error('TELEGRAM_BOT_TOKEN is missing. Please set it in your environment variables.');
+}
 
 export const bot = new Bot(token);
 
@@ -15,7 +17,7 @@ bot.command('start', (ctx) => {
 });
 
 bot.on('message:text', async (ctx) => {
-    const chatId = ctx.from.id;
+    const chatId = ctx.chat.id;
     const userText = ctx.message.text;
 
     // Save user's message

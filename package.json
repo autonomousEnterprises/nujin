@@ -4,6 +4,9 @@
   "type": "module",
   "main": "index.js",
   "scripts": {
+    "build": "tsc",
+    "start": "node dist/src/bot.js",
+    "dev": "ts-node src/bot.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
