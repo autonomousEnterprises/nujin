@@ -7,6 +7,7 @@ import type { BuiltinSkill } from './types.js';
 export const builtinSkills: BuiltinSkill[] = [
     weatherSkill,
     timeSkill,
-    websearchSkill,
+    // websearchSkill,
+    { type: "web_search" },
     webvisitSkill,
 ];
