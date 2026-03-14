@@ -21,9 +21,12 @@ A serverless Telegram Bot built with Grammy and Vercel. It acts as an autonomous
    ```env
    TELEGRAM_BOT_TOKEN=your_telegram_bot_token
    SUPABASE_URL=your_supabase_url
-   SUPABASE_KEY=your_supabase_anon_key
+   SUPABASE_KEY=your_supabase_service_role_key
    OPENAI_API_KEY=your_openai_api_key
    ```
+   
+   > [!NOTE]
+   > Use the `service_role` key from Supabase (Settings > API) to bypass RLS policies for the backend bot. If you use the `anon` key, ensure the RLS policies in `supabase_setup.sql` are applied.
 
 4. **Database Schema:**
    Run the SQL script `supabase_setup.sql` in your Supabase SQL Editor to create the `chat_history` and `bot_skills` tables.

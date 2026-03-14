@@ -23,7 +23,15 @@ CREATE TABLE IF NOT EXISTS public.bot_skills (
 ALTER TABLE public.chat_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.bot_skills ENABLE ROW LEVEL SECURITY;
 
--- Note: Since the bot is backend-driven, you might want to use the service role key.
--- If you need specific policies, you can define them here.
--- Example: Allow service role full access (default)
--- For client-side access, you would need more specific policies.
+-- RLS Policies
+
+-- Allow anyone to insert and select chat history (since we identify by chat_id)
+CREATE POLICY "Allow anon insert" ON public.chat_history FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow anon select" ON public.chat_history FOR SELECT USING (true);
+
+-- Allow anyone to insert and select bot skills
+CREATE POLICY "Allow anon insert" ON public.bot_skills FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow anon select" ON public.bot_skills FOR SELECT USING (true);
+
+-- Note: In production, you might want to use the service role key for the backend bot
+-- to bypass RLS entirely instead of using these wide-open policies.
