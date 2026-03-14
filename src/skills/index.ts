@@ -8,6 +8,5 @@ export const builtinSkills: BuiltinSkill[] = [
     weatherSkill,
     timeSkill,
     // websearchSkill,
-    { type: "web_search" },
     webvisitSkill,
 ];

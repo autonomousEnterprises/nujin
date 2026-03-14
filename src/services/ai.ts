@@ -37,7 +37,8 @@ export async function processChat(messages: any[], chatId: number): Promise<stri
                     required: ['name', 'description', 'code']
                 }
             }
-        }
+        },
+        { type: "web_search" }
     ];
 
     // Expose existing dynamic skills
@@ -66,7 +67,7 @@ export async function processChat(messages: any[], chatId: number): Promise<stri
             type: 'function',
             function: {
                 name: `builtin_${skill.name}`,
-                description: `CRITICAL BUILT-IN SKILL: ${skill.description}. USE THIS for any real-time information, news, or general knowledge search.`,
+                description: `BUILT-IN SKILL: ${skill.description}. USE THIS for any real-time information, news, or general knowledge search.`,
                 parameters: skill.parameters
             }
         });
