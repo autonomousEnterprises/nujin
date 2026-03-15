@@ -127,56 +127,51 @@ export async function processChat(messages: any[], chatId: number): Promise<stri
         if (!message) return 'No response generated.';
 
         if (message.tool_calls && message.tool_calls.length > 0) {
-            const toolCall = message.tool_calls[0] as any;
-            const args = JSON.parse(toolCall.function.arguments || '{}');
+            messages.push(message);
 
-            if (toolCall.function.name === 'create_tool') {
-                const saved = await saveDynamicTool({
-                    name: args.name,
-                    description: args.description,
-                    code: args.code
-                });
-                const content = saved ? `Saved tool: ${args.name}` : 'Failed to save.';
-                messages.push(message);
-                messages.push({ role: 'tool', tool_call_id: toolCall.id, content });
-                return processChat(messages, chatId);
+            for (const toolCall of message.tool_calls) {
+                const args = JSON.parse(toolCall.function.arguments || '{}');
+
+                if (toolCall.function.name === 'create_tool') {
+                    const saved = await saveDynamicTool({
+                        name: args.name,
+                        description: args.description,
+                        code: args.code
+                    });
+                    const content = saved ? `Saved tool: ${args.name}` : 'Failed to save.';
+                    messages.push({ role: 'tool', tool_call_id: toolCall.id, content });
+                }
+                else if (toolCall.function.name === 'create_skill') {
+                    const saved = await saveDynamicSkill({
+                        name: args.name,
+                        description: args.description,
+                        content: args.content
+                    });
+                    const content = saved ? `Saved skill: ${args.name}` : 'Failed to save.';
+                    messages.push({ role: 'tool', tool_call_id: toolCall.id, content });
+                }
+                else if (toolCall.function.name === 'read_skill') {
+                    const result = await readSkillContent(args.name) || 'Skill not found.';
+                    messages.push({ role: 'tool', tool_call_id: toolCall.id, content: result });
+                }
+                else if (toolCall.function.name.startsWith('tool_execute_')) {
+                    const name = toolCall.function.name.replace('tool_execute_', '');
+                    const tool = dynamicTools.find(t => t.name === name);
+                    const result = tool ? await executeDynamicTool(tool.code, args.args || args) : 'Tool not found.';
+                    messages.push({ role: 'tool', tool_call_id: toolCall.id, content: JSON.stringify(result) });
+                }
+                else if (toolCall.function.name.startsWith('tool_')) {
+                    const name = toolCall.function.name.replace('tool_', '');
+                    const tool = builtinTools.find(t => t.name === name);
+                    let result;
+                    if (tool) {
+                        try { result = await tool.execute(args, { chatId }); } catch (e: any) { result = `Error: ${e.message}`; }
+                    } else { result = 'Tool not found.'; }
+                    messages.push({ role: 'tool', tool_call_id: toolCall.id, content: JSON.stringify(result) });
+                }
             }
-            else if (toolCall.function.name === 'create_skill') {
-                const saved = await saveDynamicSkill({
-                    name: args.name,
-                    description: args.description,
-                    content: args.content
-                });
-                const content = saved ? `Saved skill: ${args.name}` : 'Failed to save.';
-                messages.push(message);
-                messages.push({ role: 'tool', tool_call_id: toolCall.id, content });
-                return processChat(messages, chatId);
-            }
-            else if (toolCall.function.name === 'read_skill') {
-                const result = await readSkillContent(args.name) || 'Skill not found.';
-                messages.push(message);
-                messages.push({ role: 'tool', tool_call_id: toolCall.id, content: result });
-                return processChat(messages, chatId);
-            }
-            else if (toolCall.function.name.startsWith('tool_execute_')) {
-                const name = toolCall.function.name.replace('tool_execute_', '');
-                const tool = dynamicTools.find(t => t.name === name);
-                const result = tool ? await executeDynamicTool(tool.code, args.args || args) : 'Tool not found.';
-                messages.push(message);
-                messages.push({ role: 'tool', tool_call_id: toolCall.id, content: JSON.stringify(result) });
-                return processChat(messages, chatId);
-            }
-            else if (toolCall.function.name.startsWith('tool_')) {
-                const name = toolCall.function.name.replace('tool_', '');
-                const tool = builtinTools.find(t => t.name === name);
-                let result;
-                if (tool) {
-                    try { result = await tool.execute(args, { chatId }); } catch (e: any) { result = `Error: ${e.message}`; }
-                } else { result = 'Tool not found.'; }
-                messages.push(message);
-                messages.push({ role: 'tool', tool_call_id: toolCall.id, content: JSON.stringify(result) });
-                return processChat(messages, chatId);
-            }
+
+            return processChat(messages, chatId);
         }
 
         return message.content || 'I have nothing more to say.';
