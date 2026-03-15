@@ -129,7 +129,9 @@ export async function processChat(messages: any[], chatId: number): Promise<stri
         if (message.tool_calls && message.tool_calls.length > 0) {
             messages.push(message);
 
-            for (const toolCall of message.tool_calls) {
+            for (const tc of message.tool_calls) {
+                if (tc.type !== 'function') continue;
+                const toolCall = tc as any;
                 const args = JSON.parse(toolCall.function.arguments || '{}');
 
                 if (toolCall.function.name === 'create_tool') {
