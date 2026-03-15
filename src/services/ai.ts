@@ -170,7 +170,7 @@ export async function processChat(messages: any[], chatId: number): Promise<stri
                 const tool = builtinTools.find(t => t.name === name);
                 let result;
                 if (tool) {
-                    try { result = await tool.execute(args); } catch (e: any) { result = `Error: ${e.message}`; }
+                    try { result = await tool.execute(args, { chatId }); } catch (e: any) { result = `Error: ${e.message}`; }
                 } else { result = 'Tool not found.'; }
                 messages.push(message);
                 messages.push({ role: 'tool', tool_call_id: toolCall.id, content: JSON.stringify(result) });

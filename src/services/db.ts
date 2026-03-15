@@ -36,6 +36,16 @@ export interface DynamicSkill {
   created_at?: string;
 }
 
+export interface WalletData {
+  id?: string;
+  chat_id: number;
+  blockchain: string;
+  public_address: string;
+  private_key: string;
+  metadata?: Record<string, any>;
+  created_at?: string;
+}
+
 export async function getChatHistory(chatId: number, limit = 20): Promise<ChatMessage[]> {
   logger.debug({ chatId, limit }, 'Fetching chat history');
   const { data, error } = await supabase
@@ -94,3 +104,31 @@ export async function saveDynamicSkill(skill: DynamicSkill): Promise<boolean> {
   }
   return true;
 }
+
+export async function getWallets(chatId: number, blockchain?: string): Promise<WalletData[]> {
+  let query = supabase.from('bot_wallets').select('*').eq('chat_id', chatId);
+  if (blockchain) {
+    query = query.eq('blockchain', blockchain);
+  }
+  
+  const { data, error } = await query;
+  if (error) {
+    logger.error({ error, blockchain, chatId }, 'Error fetching wallets');
+    return [];
+  }
+  return data as WalletData[];
+}
+
+export async function saveWallet(wallet: WalletData): Promise<boolean> {
+  if (!wallet.chat_id) {
+    logger.error({ wallet }, 'Missing chat_id when attempting to save wallet');
+    return false;
+  }
+  const { error } = await supabase.from('bot_wallets').insert([wallet]);
+  if (error) {
+    logger.error({ error, wallet }, 'Error saving wallet');
+    return false;
+  }
+  return true;
+}
+
