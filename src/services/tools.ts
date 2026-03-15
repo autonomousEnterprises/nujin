@@ -14,29 +14,23 @@ export async function executeDynamicTool(code: string, args: Record<string, any>
     const sandbox = {
       args,          // The arguments passed from the AI
       console,       // Let skills log if needed
-      fetch,         // Expose fetch for HTTP requests
+      fetch: (...fetchArgs: any[]) => (fetch as any)(...fetchArgs), // Safe fetch binding
       result: null,  // Variable to store the return value
       setTimeout,
       clearTimeout,
       setInterval,
       clearInterval,
       Buffer,
-      process: { env: process.env } // Optionally expose env config safely
     };
 
     // Create a context out of the sandbox
     const context = vm.createContext(sandbox);
 
-    // Wrap the code in an async IIFE so we can handle await safely and
-    // assign the result to the sandbox.result and wait for it
+    // Wrap the code in an async function and return the promise
     const wrappedCode = `
       (async function main() {
         try {
           ${code}
-          
-          // If the code doesn't explicitly set standard result, try to capture value
-          // e.g. tool might just do:
-          // result = await fetch(...);
         } catch(e) {
           throw e;
         }
@@ -45,11 +39,23 @@ export async function executeDynamicTool(code: string, args: Record<string, any>
 
     // Execute the code
     const script = new vm.Script(wrappedCode);
-    await script.runInContext(context, { timeout: 10000 }); // 10s timeout
+    
+    // vm.Script timeout only tracks CPU time, not wall clock (like fetch)
+    // So we await the promise returned by the async IIFE
+    const executionPromise = script.runInContext(context, { timeout: 10000 });
 
-    logger.info({ result: context.result }, 'Skill execution result');
-    // We can also have skills assign to `result` 
-    return context.result;
+    // Race against a wall-clock timeout for network requests etc
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Skill execution timed out (Wall Clock)')), 10000)
+    );
+
+    const returnedValue = await Promise.race([executionPromise, timeoutPromise]);
+
+    // Priority: context.result (explicit assignment) > returnedValue (standard return)
+    const finalResult = context.result !== null ? context.result : returnedValue;
+
+    logger.info({ result: finalResult }, 'Skill execution result');
+    return finalResult;
   } catch (error: any) {
     logger.error({ error: error.message, stack: error.stack }, 'Error executing skill code');
     return `Error executing skill: ${error.message}`;
