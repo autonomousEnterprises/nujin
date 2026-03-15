@@ -47,7 +47,25 @@ ALTER TABLE bot_skills ENABLE ROW LEVEL SECURITY;
 ALTER TABLE bot_wallets ENABLE ROW LEVEL SECURITY;
 
 -- Allow all authenticated users to read/write for now (adjust as needed)
+DROP POLICY IF EXISTS "Allow all access" ON chat_history;
 CREATE POLICY "Allow all access" ON chat_history FOR ALL USING (true);
+
+DROP POLICY IF EXISTS "Allow all access" ON bot_tools;
 CREATE POLICY "Allow all access" ON bot_tools FOR ALL USING (true);
+
+DROP POLICY IF EXISTS "Allow all access" ON bot_skills;
 CREATE POLICY "Allow all access" ON bot_skills FOR ALL USING (true);
+
+DROP POLICY IF EXISTS "Allow all access" ON bot_wallets;
 CREATE POLICY "Allow all access" ON bot_wallets FOR ALL USING (true);
+
+-- 5. Telegram Webhook Deduplication Table
+CREATE TABLE IF NOT EXISTS processed_updates (
+    update_id BIGINT PRIMARY KEY,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+
+ALTER TABLE processed_updates ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow all access" ON processed_updates;
+CREATE POLICY "Allow all access" ON processed_updates FOR ALL USING (true);
+

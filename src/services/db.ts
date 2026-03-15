@@ -110,7 +110,6 @@ export async function getWallets(chatId: number, blockchain?: string): Promise<W
   if (blockchain) {
     query = query.eq('blockchain', blockchain);
   }
-  
   const { data, error } = await query;
   if (error) {
     logger.error({ error, blockchain, chatId }, 'Error fetching wallets');
@@ -118,6 +117,27 @@ export async function getWallets(chatId: number, blockchain?: string): Promise<W
   }
   return data as WalletData[];
 }
+
+export async function isUpdateProcessed(updateId: number): Promise<boolean> {
+  // Try to insert the updateId. If it fails (already exists), it means it's processed.
+  const { error } = await supabase
+    .from('processed_updates')
+    .insert([{ update_id: updateId }]);
+  
+  if (error) {
+    if (error.code === '23505') { // Unique violation
+      return true;
+    }
+    logger.error({ error, updateId }, 'Error checking if update is processed');
+    // If it's a "relation not found" error, we should probably log it clearly
+    if (error.code === 'PGRST116' || error.message.includes('not found')) {
+       logger.error('Table "processed_updates" does not exist. Please run the SQL setup.');
+    }
+  }
+  
+  return false;
+}
+
 
 export async function saveWallet(wallet: WalletData): Promise<boolean> {
   if (!wallet.chat_id) {
