@@ -1,7 +1,7 @@
-import type { BuiltinSkill } from './types.js';
+import type { BuiltinTool } from './types.js';
 import * as cheerio from 'cheerio';
 
-export const websearchSkill: BuiltinSkill = {
+export const websearchTool: BuiltinTool = {
     name: 'web_search',
     description: 'Search the web for information using a search query',
     parameters: {

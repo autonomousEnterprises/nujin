@@ -1,6 +1,6 @@
-import type { BuiltinSkill } from './types.js';
+import type { BuiltinTool } from './types.js';
 
-export const timeSkill: BuiltinSkill = {
+export const timeTool: BuiltinTool = {
     name: 'get_time',
     description: 'Get the current server time',
     parameters: {

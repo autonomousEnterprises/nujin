@@ -1,7 +1,7 @@
-import type { BuiltinSkill } from './types.js';
+import type { BuiltinTool } from './types.js';
 import * as cheerio from 'cheerio';
 
-export const webvisitSkill: BuiltinSkill = {
+export const webvisitTool: BuiltinTool = {
     name: 'web_visit',
     description: 'Visit a website URL and extract its main text content',
     parameters: {

@@ -1,4 +1,4 @@
-export interface Tool {
+export interface BuiltinTool {
     name: string;
     description: string;
     parameters: Record<string, any>;
