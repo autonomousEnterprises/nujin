@@ -20,11 +20,19 @@ export interface ChatMessage {
   created_at?: string;
 }
 
-export interface Skill {
+export interface DynamicTool {
   id?: string;
   name: string;
   description: string;
   code: string;
+  created_at?: string;
+}
+
+export interface DynamicSkill {
+  id?: string;
+  name: string;
+  description: string;
+  content: string;
   created_at?: string;
 }
 
@@ -51,19 +59,37 @@ export async function saveChatMessage(message: ChatMessage): Promise<void> {
   }
 }
 
-export async function getSkills(): Promise<Skill[]> {
-  const { data, error } = await supabase.from('bot_skills').select('*');
+export async function getDynamicTools(): Promise<DynamicTool[]> {
+  const { data, error } = await supabase.from('bot_tools').select('*');
   if (error) {
-    logger.error({ error }, 'Error fetching skills');
+    logger.error({ error }, 'Error fetching dynamic tools');
     return [];
   }
-  return data as Skill[];
+  return data as DynamicTool[];
 }
 
-export async function saveSkill(skill: Skill): Promise<boolean> {
+export async function saveDynamicTool(tool: DynamicTool): Promise<boolean> {
+  const { error } = await supabase.from('bot_tools').insert([tool]);
+  if (error) {
+    logger.error({ error, tool }, 'Error saving dynamic tool');
+    return false;
+  }
+  return true;
+}
+
+export async function getDynamicSkills(): Promise<DynamicSkill[]> {
+  const { data, error } = await supabase.from('bot_skills').select('*');
+  if (error) {
+    logger.error({ error }, 'Error fetching dynamic skills');
+    return [];
+  }
+  return data as DynamicSkill[];
+}
+
+export async function saveDynamicSkill(skill: DynamicSkill): Promise<boolean> {
   const { error } = await supabase.from('bot_skills').insert([skill]);
   if (error) {
-    logger.error({ error, skill }, 'Error saving skill');
+    logger.error({ error, skill }, 'Error saving dynamic skill');
     return false;
   }
   return true;

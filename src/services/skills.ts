@@ -1,57 +1,60 @@
-import * as vm from 'vm';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { logger } from './logger.js';
+import { getDynamicSkills } from './db.js';
 
-/**
- * Executes dynamic Javascript code in a sandboxed V8 context
- * @param code The Javascript code string 
- * @param args Arguments to pass to the code
- * @returns The resolved result from the code execution
- */
-export async function executeSkill(code: string, args: Record<string, any> = {}): Promise<any> {
-    logger.info({ args }, 'Executing skill code');
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const SKILLS_DIR = path.join(__dirname, '../skills');
+
+export interface SkillSOP {
+    name: string;
+    description: string;
+    content: string;
+}
+
+export async function getAvailableSkills(): Promise<SkillSOP[]> {
     try {
-        // The sandbox environment exposing safe globals
-        const sandbox = {
-            args,          // The arguments passed from the AI
-            console,       // Let skills log if needed
-            fetch,         // Expose fetch for HTTP requests
-            result: null,  // Variable to store the return value
-            setTimeout,
-            clearTimeout,
-            setInterval,
-            clearInterval,
-            Buffer,
-            process: { env: process.env } // Optionally expose env config safely
-        };
-
-        // Create a context out of the sandbox
-        const context = vm.createContext(sandbox);
-
-        // Wrap the code in an async IIFE so we can handle await safely and
-        // assign the result to the sandbox.result and wait for it
-        const wrappedCode = `
-      (async function main() {
-        try {
-          ${code}
-          
-          // If the code doesn't explicitly set standard result, try to capture value
-          // e.g. skill might just do:
-          // result = await fetch(...);
-        } catch(e) {
-          throw e;
+        const builtin: SkillSOP[] = [];
+        if (fs.existsSync(SKILLS_DIR)) {
+            builtin.push(...fs.readdirSync(SKILLS_DIR)
+                .filter(file => file.endsWith('.md'))
+                .map(file => {
+                    const content = fs.readFileSync(path.join(SKILLS_DIR, file), 'utf-8');
+                    const firstLine = content.split('\n')[0] || '';
+                    return {
+                        name: file.replace('.md', ''),
+                        description: firstLine.replace('#', '').trim(),
+                        content
+                    };
+                }));
         }
-      })();
-    `;
 
-        // Execute the code
-        const script = new vm.Script(wrappedCode);
-        await script.runInContext(context, { timeout: 10000 }); // 10s timeout
+        const dynamic = await getDynamicSkills();
+        const convertedDynamic = dynamic.map(s => ({
+            name: s.name,
+            description: s.description,
+            content: s.content
+        }));
 
-        logger.info({ result: context.result }, 'Skill execution result');
-        // We can also have skills assign to `result` 
-        return context.result;
+        return [...builtin, ...convertedDynamic];
     } catch (error: any) {
-        logger.error({ error: error.message, stack: error.stack }, 'Error executing skill code');
-        return `Error executing skill: ${error.message}`;
+        logger.error({ error: error.message }, 'Error loading skills');
+        return [];
     }
+}
+
+export async function readSkillContent(name: string): Promise<string | null> {
+    // Check built-in first
+    const filePath = path.join(SKILLS_DIR, `${name}.md`);
+    if (fs.existsSync(filePath)) {
+        return fs.readFileSync(filePath, 'utf-8');
+    }
+
+    // Check dynamic
+    const dynamic = await getDynamicSkills();
+    const found = dynamic.find(s => s.name === name);
+    return found ? found.content : null;
 }

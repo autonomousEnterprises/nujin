@@ -1,37 +1,40 @@
--- Create chat_history table
-CREATE TABLE IF NOT EXISTS public.chat_history (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+-- Nujin Database Setup: Tools and Skills (SOPs)
+
+-- 1. Chat History Table
+CREATE TABLE IF NOT EXISTS chat_history (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     chat_id BIGINT NOT NULL,
     role TEXT NOT NULL CHECK (role IN ('system', 'user', 'assistant', 'tool')),
     content TEXT NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT now()
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
 
--- Index for faster chat history retrieval
-CREATE INDEX IF NOT EXISTS idx_chat_history_chat_id ON public.chat_history(chat_id);
-
--- Create bot_skills table
-CREATE TABLE IF NOT EXISTS public.bot_skills (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+-- 2. Dynamic Tools Table (Executable Code)
+CREATE TABLE IF NOT EXISTS bot_tools (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name TEXT UNIQUE NOT NULL,
     description TEXT,
     code TEXT NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT now()
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
 
--- Enable Row Level Security (RLS)
-ALTER TABLE public.chat_history ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.bot_skills ENABLE ROW LEVEL SECURITY;
+-- 3. Dynamic Skills Table (Markdown SOPs)
+CREATE TABLE IF NOT EXISTS bot_skills (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name TEXT UNIQUE NOT NULL,
+    description TEXT,
+    content TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
 
--- RLS Policies
+-- Row Level Security (RLS) - Basic Setup
+-- WARNING: In production, refine these policies based on your security needs.
 
--- Allow anyone to insert and select chat history (since we identify by chat_id)
-CREATE POLICY "Allow anon insert" ON public.chat_history FOR INSERT WITH CHECK (true);
-CREATE POLICY "Allow anon select" ON public.chat_history FOR SELECT USING (true);
+ALTER TABLE chat_history ENABLE ROW LEVEL SECURITY;
+ALTER TABLE bot_tools ENABLE ROW LEVEL SECURITY;
+ALTER TABLE bot_skills ENABLE ROW LEVEL SECURITY;
 
--- Allow anyone to insert and select bot skills
-CREATE POLICY "Allow anon insert" ON public.bot_skills FOR INSERT WITH CHECK (true);
-CREATE POLICY "Allow anon select" ON public.bot_skills FOR SELECT USING (true);
-
--- Note: In production, you might want to use the service role key for the backend bot
--- to bypass RLS entirely instead of using these wide-open policies.
+-- Allow all authenticated users to read/write for now (adjust as needed)
+CREATE POLICY "Allow all access" ON chat_history FOR ALL USING (true);
+CREATE POLICY "Allow all access" ON bot_tools FOR ALL USING (true);
+CREATE POLICY "Allow all access" ON bot_skills FOR ALL USING (true);
