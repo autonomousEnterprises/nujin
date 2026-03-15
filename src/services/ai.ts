@@ -123,7 +123,7 @@ export async function processChat(messages: any[], chatId: number): Promise<stri
         if (!message) return 'No response generated.';
 
         if (message.tool_calls && message.tool_calls.length > 0) {
-            messages.push(message);
+            messages.push({ ...message, content: message.content || '' });
 
             for (const tc of message.tool_calls) {
                 if (tc.type !== 'function') continue;
@@ -156,7 +156,7 @@ export async function processChat(messages: any[], chatId: number): Promise<stri
                     const name = toolCall.function.name.replace('tool_execute_', '');
                     const tool = dynamicTools.find(t => t.name === name);
                     const result = tool ? await executeDynamicTool(tool.code, args.args || args) : 'Tool not found.';
-                    messages.push({ role: 'tool', tool_call_id: toolCall.id, content: JSON.stringify(result) });
+                    messages.push({ role: 'tool', tool_call_id: toolCall.id, content: JSON.stringify(result) ?? 'null' });
                 }
                 else if (toolCall.function.name.startsWith('tool_')) {
                     const name = toolCall.function.name.replace('tool_', '');
@@ -165,7 +165,7 @@ export async function processChat(messages: any[], chatId: number): Promise<stri
                     if (tool) {
                         try { result = await tool.execute(args, { chatId }); } catch (e: any) { result = `Error: ${e.message}`; }
                     } else { result = 'Tool not found.'; }
-                    messages.push({ role: 'tool', tool_call_id: toolCall.id, content: JSON.stringify(result) });
+                    messages.push({ role: 'tool', tool_call_id: toolCall.id, content: JSON.stringify(result) ?? 'null' });
                 }
             }
 

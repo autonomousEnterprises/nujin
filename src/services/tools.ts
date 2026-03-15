@@ -15,7 +15,7 @@ export async function executeDynamicTool(code: string, args: Record<string, any>
       args,          // The arguments passed from the AI
       console,       // Let skills log if needed
       fetch: (...fetchArgs: any[]) => (fetch as any)(...fetchArgs), // Safe fetch binding
-      result: null,  // Variable to store the return value
+      result: undefined,  // Variable to store the return value
       setTimeout,
       clearTimeout,
       setInterval,
@@ -26,11 +26,13 @@ export async function executeDynamicTool(code: string, args: Record<string, any>
     // Create a context out of the sandbox
     const context = vm.createContext(sandbox);
 
-    // Wrap the code in an async function and return the promise
+    // Wrap the code in an async function and return the logic result
     const wrappedCode = `
       (async function main() {
         try {
-          ${code}
+          return await (async () => {
+            ${code}
+          })();
         } catch(e) {
           throw e;
         }
@@ -52,7 +54,7 @@ export async function executeDynamicTool(code: string, args: Record<string, any>
     const returnedValue = await Promise.race([executionPromise, timeoutPromise]);
 
     // Priority: context.result (explicit assignment) > returnedValue (standard return)
-    const finalResult = context.result !== null ? context.result : returnedValue;
+    const finalResult = context.result !== undefined ? context.result : returnedValue;
 
     logger.info({ result: finalResult }, 'Skill execution result');
     return finalResult;

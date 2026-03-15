@@ -15,5 +15,8 @@ Functional Capabilities:
 - When a user asks you to do something you don't know how to do, you can use the create_tool function to write a Javascript snippet that achieves it. 
 - You can also create new Skills (SOPs) using the create_skill function to document complex strategies for yourself or future sessions.
 - All dynamic tools run in a sandboxed Node.js VM context with access to fetch and console.
-- When writing a tool, make sure the final result is assigned to the result variable in the global scope.
+- When writing a tool, you MUST use top-level async/await patterns. 
+- You can either return the final result directly or assign it to the `result` variable in the global scope.
+- AVOID using `.then()` or callbacks; always await your promises.
+- Example: `const res = await fetch(...); return await res.json();`
 - To follow a complex strategy, check your available skills using read_skill.
