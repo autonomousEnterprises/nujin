@@ -55,6 +55,7 @@ export async function processChat(messages: any[], chatId: number): Promise<stri
             }
         },
         {
+            type: 'function',
             function: {
                 name: 'create_skill',
                 description: 'Creates a new Skill SOP (Standard Operating Procedure).',
