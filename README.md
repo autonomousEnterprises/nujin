@@ -1,5 +1,8 @@
 # Telegram AI Bot (Agentic Serverless)
 
+> [!WARNING]
+> This project is in a very early stage and is currently in the development and testing phase. Use it at your own risk. Contributions and feedback are always welcome!
+
 A serverless Telegram Bot built with Grammy and Vercel. It acts as an autonomous AI agent capable of writing and executing its own JavaScript skills dynamically using a secure VM context. Memory and Skills are persisted in Supabase.
 
 ## Setup
