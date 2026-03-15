@@ -5,8 +5,7 @@ import { webvisitSkill as webvisitTool } from './webvisit.js';
 import type { Tool } from './types.js';
 
 export const builtinTools: Tool[] = [
-    weatherTool,
     timeTool,
-    // websearchTool,
+    websearchTool,
     webvisitTool,
 ];
