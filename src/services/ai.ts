@@ -1,7 +1,7 @@
 import OpenAI from 'openai';
 import { getSkills, saveSkill } from './db.js';
 import { executeSkill } from './skills.js';
-import { builtinSkills } from '../skills/index.js';
+import { builtinTools } from '../tools/index.js';
 import { logger } from './logger.js';
 
 const openai = new OpenAI({
@@ -11,18 +11,21 @@ const openai = new OpenAI({
 export const SYSTEM_PROMPT = `
 You are Nujin, the world's first free-to-use, serverless, zero-runtime-cost autonomous onchain AI Agent. You are designed to generate a living for your user while they enjoy life. 
 
+Key architectural components:
+1. Tools: These are your built-in, static primitive capabilities (e.g., checking weather, time, or web search). 
+2. Skills: These are your dynamic, learned capabilities. You can create them yourself to solve complex problems.
+
 Key characteristics:
 - Autonomous: You operate proactively to achieve financial goals.
 - Self-Improving: You continuously optimize your own skills and tools based on performance.
 - Onchain Native: You operate directly on the blockchain with transparent and unstoppable execution.
 
 Functional Capabilities:
-- You can write and execute your own skills dynamically.
 - When a user asks you to do something you don't know how to do, you can use the create_skill function to write a Javascript snippet that achieves it. 
 - All skills run in a sandboxed Node.js VM context with access to fetch and console.
 - When writing a skill, make sure the final result is assigned to the result variable in the global scope (e.g. result = await fetch(...).then(r => r.json());). 
-- To use an existing skill, you can use the execute_skill function.
-- You also have built-in skills available for common tasks.
+- To use an existing learned skill, you can use the execute_skill functions.
+- You also have built-in tools available for common primitive tasks.
 `;
 
 export async function processChat(messages: any[], chatId: number): Promise<string> {
@@ -70,14 +73,14 @@ export async function processChat(messages: any[], chatId: number): Promise<stri
         });
     }
 
-    // Expose built-in skills
-    for (const skill of builtinSkills) {
+    // Expose built-in tools
+    for (const tool of builtinTools) {
         tools.push({
             type: 'function',
             function: {
-                name: `builtin_${skill.name}`,
-                description: `BUILT-IN SKILL: ${skill.description}. USE THIS for any real-time information, news, or general knowledge search.`,
-                parameters: skill.parameters
+                name: `tool_${tool.name}`,
+                description: `BUILT-IN TOOL: ${tool.description}. USE THIS for any real-time information, news, or general knowledge search.`,
+                parameters: tool.parameters
             }
         });
     }
@@ -141,23 +144,23 @@ export async function processChat(messages: any[], chatId: number): Promise<stri
 
                 return processChat(messages, chatId);
             }
-            else if (toolCall.function.name.startsWith('builtin_')) {
-                const skillName = toolCall.function.name.replace('builtin_', '');
-                const skill = builtinSkills.find(s => s.name === skillName);
+            else if (toolCall.function.name.startsWith('tool_')) {
+                const toolName = toolCall.function.name.replace('tool_', '');
+                const tool = builtinTools.find(t => t.name === toolName);
 
                 let executionResult;
-                if (skill) {
+                if (tool) {
                     try {
-                        executionResult = await skill.execute(args);
+                        executionResult = await tool.execute(args);
                     } catch (e: any) {
-                        logger.error({ error: e.message, skillName, chatId }, 'Error executing built-in skill');
-                        executionResult = `Error executing built-in skill: ${e.message}`;
+                        logger.error({ error: e.message, toolName, chatId }, 'Error executing built-in tool');
+                        executionResult = `Error executing built-in tool: ${e.message}`;
                     }
                 } else {
-                    executionResult = `Built-in skill ${skillName} not found.`;
+                    executionResult = `Built-in tool ${toolName} not found.`;
                 }
 
-                logger.info({ skillName, success: !!skill, chatId }, 'Built-in skill execution completed');
+                logger.info({ toolName, success: !!tool, chatId }, 'Built-in tool execution completed');
 
                 messages.push(message);
                 messages.push({
