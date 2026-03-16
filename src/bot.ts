@@ -107,9 +107,9 @@ bot.on('message:text', async (ctx) => {
         // Send the agent's message to the user
         await ctx.reply(decision.message_to_telegram);
 
-        // If the agent decided to keep going, kick off the next loop iteration.
-        // MUST be awaited — Vercel freezes the process on response, so any
-        // unawaited fetch would be suspended before it reaches the server.
+        // If the agent wants to keep going, kick off the cron loop once.
+        // Only bot.ts does this initial kick-off; cron.ts drives all subsequent
+        // iterations itself via its own triggerSelf call.
         if (decision.decision === 'CONTINUE') {
             await triggerSelf();
         }

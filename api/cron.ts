@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { getWorkingTasks, upsertAgentTask } from '../src/services/db.js';
+import { getWorkingTasks, upsertAgentTask, claimAgentTask } from '../src/services/db.js';
 import { runAgentLoop } from '../src/services/ai.js';
 import { logger } from '../src/services/logger.js';
 import { triggerSelf } from '../src/services/selfTrigger.js';
@@ -71,6 +71,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     for (const task of workingTasks) {
         const chatId = task.chat_id;
         logger.info({ chatId, goal: task.goal }, 'Processing working task');
+
+        // Atomically claim the task (working → processing).
+        // If this returns false, another cron invocation already claimed it — skip.
+        const claimed = await claimAgentTask(chatId);
+        if (!claimed) {
+            logger.info({ chatId }, 'Task already claimed by another invocation — skipping');
+            continue;
+        }
 
         try {
             const decision = await runAgentLoop(chatId, task);

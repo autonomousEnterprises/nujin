@@ -157,7 +157,7 @@ export async function saveWallet(wallet: WalletData): Promise<boolean> {
 export interface AgentTask {
   id?: string;
   chat_id: number;
-  status: 'idle' | 'working' | 'awaiting_user';
+  status: 'idle' | 'working' | 'awaiting_user' | 'processing';
   goal?: string | null;
   task_history: Array<{ thought: string; action?: string; result?: string }>;
   updated_at?: string;
@@ -189,15 +189,54 @@ export async function upsertAgentTask(task: Partial<AgentTask> & { chat_id: numb
   return true;
 }
 
+/**
+ * Atomically claims a task for processing by transitioning its status
+ * from 'working' → 'processing'. Returns true only if THIS invocation won
+ * the race. Any concurrent cron that tries to claim the same task will get
+ * back an empty result and should skip it.
+ */
+export async function claimAgentTask(chatId: number): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('agent_tasks')
+    .update({ status: 'processing', updated_at: new Date().toISOString() })
+    .eq('chat_id', chatId)
+    .eq('status', 'working')
+    .select();
+
+  if (error) {
+    logger.error({ error, chatId }, 'Error claiming agent task');
+    return false;
+  }
+  return Array.isArray(data) && data.length > 0;
+}
+
 export async function getWorkingTasks(): Promise<AgentTask[]> {
+  const STALE_PROCESSING_THRESHOLD_MS = 60_000; // 60 seconds
+  const staleThreshold = new Date(Date.now() - STALE_PROCESSING_THRESHOLD_MS).toISOString();
+
+  // Fetch tasks that are 'working', OR 'processing' but have been stuck
+  // for > 60 s (e.g. cron crashed before finishing).
   const { data, error } = await supabase
     .from('agent_tasks')
     .select('*')
-    .eq('status', 'working');
+    .or(`status.eq.working,and(status.eq.processing,updated_at.lt.${staleThreshold})`);
 
   if (error) {
     logger.error({ error }, 'Error fetching working agent tasks');
     return [];
   }
+
+  // Re-mark any stale 'processing' tasks back to 'working' so claimAgentTask
+  // can pick them up cleanly.
+  const staleTasks = (data as AgentTask[]).filter(t => t.status === 'processing');
+  for (const stale of staleTasks) {
+    logger.warn({ chatId: stale.chat_id }, 'Resetting stale processing task to working');
+    await supabase
+      .from('agent_tasks')
+      .update({ status: 'working', updated_at: new Date().toISOString() })
+      .eq('chat_id', stale.chat_id)
+      .eq('status', 'processing');
+  }
+
   return data as AgentTask[];
 }
