@@ -60,9 +60,6 @@ bot.on('message:text', async (ctx) => {
         content: userText
     });
 
-    // Indicate typing
-    await ctx.replyWithChatAction('typing');
-
     // Load chat history
     const history = await getChatHistory(chatId);
     const messages = [
@@ -75,6 +72,9 @@ bot.on('message:text', async (ctx) => {
 
     try {
         const aiResponse = await processChat(messages, chatId);
+
+        // Indicate typing
+        await ctx.replyWithChatAction('typing');
 
         // Save AI response
         await saveChatMessage({
