@@ -3,7 +3,7 @@ import { logger } from '../services/logger.js';
 
 export const websearchTool: BuiltinTool = {
     name: 'web_search',
-    description: 'Search the web for information using Langsearch API',
+    description: 'Search the web for information using Langsearch API. ALWAYS cite your sources for each finding using inline links.',
     parameters: {
         type: 'object',
         properties: {
@@ -75,7 +75,7 @@ export const websearchTool: BuiltinTool = {
             }
 
             return `Search results for "${query}":\n\n` + 
-                results.map((r: any) => `**${r.title}**\nURL: ${r.url}\n${r.snippet}`).join('\n\n');
+                results.map((r: any) => `**${r.title}** ([Source Link](${r.url}))\n${r.snippet}`).join('\n\n');
         } catch (e: any) {
             logger.error({ error: e.message }, 'web_search: Unexpected error');
             return `Search failed: ${e.message || 'Unknown error'}`;
