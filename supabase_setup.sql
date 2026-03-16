@@ -73,7 +73,7 @@ CREATE POLICY "Allow all access" ON processed_updates FOR ALL USING (true);
 CREATE TABLE IF NOT EXISTS agent_tasks (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     chat_id BIGINT UNIQUE NOT NULL,
-    status TEXT DEFAULT 'idle' CHECK (status IN ('idle', 'working', 'awaiting_user')),
+    status TEXT DEFAULT 'idle' CHECK (status IN ('idle', 'working', 'awaiting_user', 'processing')),
     goal TEXT,
     task_history JSONB DEFAULT '[]'::jsonb,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
