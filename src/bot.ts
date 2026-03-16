@@ -67,14 +67,16 @@ bot.on('message:text', async (ctx) => {
                 task_history: []
             };
         } else {
-            const previousStatus = task.status;
-            // If idle or no history, treat this as a brand new goal
-            if (previousStatus === 'idle' || task.task_history.length === 0) {
+            // If the goal is not set, this is a brand new task.
+            // Otherwise, it's a follow-up or reply to an existing task.
+            if (!task.goal || task.goal.trim() === '') {
                 task.goal = userText;
                 task.task_history = [];
             } else {
-                // User replied while bot was awaiting_user — append as context
-                task.task_history.push({ thought: `User replied: ${userText}` });
+                // Append the user's message as a new entry in task_history so the AI has context.
+                task.task_history.push({
+                    thought: `User replied: ${userText}`
+                });
             }
             task.status = 'working';
         }
