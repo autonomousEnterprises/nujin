@@ -40,22 +40,6 @@ export interface AgentDecision {
     message_to_telegram: string;
 }
 
-const AGENT_SYSTEM_PROMPT = `You are an autonomous AI Agent called Nujin. You operate in a reasoning loop.
-You will receive your current GOAL and TASK_HISTORY.
-You MUST respond ONLY with a single valid JSON object — no prose, no markdown fences — in this exact format:
-{
-  "thought": "Your internal reasoning about what to do next",
-  "decision": "CONTINUE" | "WAIT_FOR_USER" | "FINISH",
-  "tool_to_call": "optional_tool_name or null",
-  "tool_args": {},
-  "message_to_telegram": "Short status update or question for the user"
-}
-Rules:
-- CONTINUE  → you have more autonomous steps to take. Call a tool or reason further.
-- WAIT_FOR_USER → you need clarification or permission before continuing.
-- FINISH → the goal has been fully achieved. Summarise what was done.
-Always write message_to_telegram in a concise, human-friendly tone.`;
-
 export async function runAgentLoop(
     chatId: number,
     task: AgentTask
@@ -86,7 +70,7 @@ export async function runAgentLoop(
         const response = await openai.chat.completions.create({
             model: 'gpt-4o-mini',
             messages: [
-                { role: 'system', content: AGENT_SYSTEM_PROMPT },
+                { role: 'system', content: SYSTEM_PROMPT },
                 { role: 'user', content: userContent }
             ],
             response_format: { type: 'json_object' }
