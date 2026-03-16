@@ -107,10 +107,11 @@ bot.on('message:text', async (ctx) => {
         // Send the agent's message to the user
         await ctx.reply(decision.message_to_telegram);
 
-        // If the agent decided to keep going, kick off the next loop iteration
-        // without awaiting so this webhook handler returns within Telegram's timeout.
+        // If the agent decided to keep going, kick off the next loop iteration.
+        // MUST be awaited — Vercel freezes the process on response, so any
+        // unawaited fetch would be suspended before it reaches the server.
         if (decision.decision === 'CONTINUE') {
-            triggerSelf();
+            await triggerSelf();
         }
 
     } catch (error: any) {

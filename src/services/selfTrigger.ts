@@ -1,16 +1,21 @@
 import { logger } from './logger.js';
 
 /**
- * Fire-and-forget self-trigger for the agent loop.
+ * Awaited self-trigger for the agent loop.
  *
- * Posts to /api/cron WITHOUT awaiting the response so the current
- * Vercel invocation can return immediately (staying within the 10 s
- * hobby-plan limit) while a fresh invocation picks up the next step.
+ * Posts to /api/cron and aborts OUR side of the connection after ~800 ms.
+ * By that point the request headers have reached Vercel's edge and a new
+ * function invocation has already started — we just don't need to wait for
+ * its response.
  *
- * Uses Vercel's auto-injected VERCEL_URL env var to resolve the host.
- * In local dev, set VERCEL_URL=localhost:3000 or similar.
+ * Key reason this must be awaited (not fire-and-forget):
+ * Vercel freezes the Node.js process the moment a serverless function sends
+ * its HTTP response, so any un-awaited fetch() would be suspended and never
+ * actually transmitted.
+ *
+ * Uses Vercel's auto-injected VERCEL_URL env var — no manual config needed.
  */
-export function triggerSelf(): void {
+export async function triggerSelf(): Promise<void> {
     const vercelUrl = process.env.VERCEL_URL;
     if (!vercelUrl) {
         logger.warn('triggerSelf: VERCEL_URL not set — cannot self-trigger');
@@ -24,18 +29,33 @@ export function triggerSelf(): void {
 
     logger.info({ url }, 'triggerSelf: firing next agent loop iteration');
 
-    // Intentionally NOT awaited — fire and forget.
-    // NOTE: Vercel's proxy strips/mangles the Authorization header on
-    // internal function-to-function requests, so we use the custom
-    // X-Cron-Secret header instead (which cron.ts already accepts).
-    fetch(url, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-Cron-Secret': secret
-        },
-        body: '{}'
-    }).catch((err: Error) => {
-        logger.error({ err: err.message }, 'triggerSelf: fetch error');
-    });
+    // Abort OUR side of the connection after 800 ms.
+    // The request will have already reached Vercel's edge by then, starting a
+    // fresh /api/cron invocation. We intentionally ignore AbortError.
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 800);
+
+    try {
+        await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                // Vercel strips the Authorization header on internal requests;
+                // use the custom X-Cron-Secret header which passes through cleanly.
+                'X-Cron-Secret': secret
+            },
+            body: '{}',
+            signal: controller.signal
+        });
+        logger.info('triggerSelf: response received (faster than abort)');
+    } catch (err: any) {
+        if (err?.name === 'AbortError') {
+            // Expected — we cancelled our side; Vercel's new invocation is running
+            logger.info('triggerSelf: aborted after sending (expected)');
+        } else {
+            logger.error({ err: err.message }, 'triggerSelf: unexpected fetch error');
+        }
+    } finally {
+        clearTimeout(timer);
+    }
 }

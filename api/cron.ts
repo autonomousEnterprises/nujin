@@ -93,10 +93,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 await sendTelegramMessage(chatId, decision.message_to_telegram);
             }
 
-            // If the agent wants to keep going, re-trigger the loop without awaiting
-            // so this invocation can return within Vercel's 10 s limit.
+            // If the agent wants to keep going, re-trigger the loop.
+            // MUST be awaited so the HTTP request reaches Vercel before this
+            // invocation returns (Vercel freezes the process on response,
+            // killing any unawaited fetch).
             if (decision.decision === 'CONTINUE') {
-                triggerSelf();
+                await triggerSelf();
             }
 
             results.push({ chatId, decision: decision.decision, status: newStatus });
