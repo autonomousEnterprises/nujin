@@ -2,6 +2,7 @@ import { timeTool } from './time.js';
 import { websearchTool } from './websearch.js';
 import { webvisitTool } from './webvisit.js';
 import { web3Tool } from './web3/index.js';
+import { createTool, createSkill, readSkill } from './system.js';
 import type { BuiltinTool } from './types.js';
 
 export const builtinTools: BuiltinTool[] = [
@@ -9,4 +10,7 @@ export const builtinTools: BuiltinTool[] = [
     websearchTool,
     webvisitTool,
     web3Tool,
+    createTool,
+    createSkill,
+    readSkill
 ];
