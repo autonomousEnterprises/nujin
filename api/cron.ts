@@ -29,6 +29,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const authHeader = req.headers['authorization'];
         const token = authHeader?.replace('Bearer ', '').trim();
         if (token !== cronSecret) {
+            console.log(token, cronSecret);
             logger.warn('Unauthorized cron request');
             return res.status(401).json({ error: 'Unauthorized' });
         }
@@ -52,9 +53,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             const decision = await runAgentLoop(chatId, task);
 
             const newStatus =
-                decision.decision === 'CONTINUE'        ? 'working'
-                : decision.decision === 'WAIT_FOR_USER' ? 'awaiting_user'
-                : 'idle'; // FINISH
+                decision.decision === 'CONTINUE' ? 'working'
+                    : decision.decision === 'WAIT_FOR_USER' ? 'awaiting_user'
+                        : 'idle'; // FINISH
 
             // Persist updated state
             await upsertAgentTask({
