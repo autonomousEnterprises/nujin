@@ -3,6 +3,7 @@ import * as dotenv from 'dotenv';
 import { getAgentTask, upsertAgentTask } from './services/db.js';
 import { runAgentLoop, SYSTEM_PROMPT } from './services/ai.js';
 import { logger } from './services/logger.js';
+import { triggerSelf } from './services/selfTrigger.js';
 
 dotenv.config();
 
@@ -105,6 +106,12 @@ bot.on('message:text', async (ctx) => {
 
         // Send the agent's message to the user
         await ctx.reply(decision.message_to_telegram);
+
+        // If the agent decided to keep going, kick off the next loop iteration
+        // without awaiting so this webhook handler returns within Telegram's timeout.
+        if (decision.decision === 'CONTINUE') {
+            triggerSelf();
+        }
 
     } catch (error: any) {
         logger.error({ error: error.message, stack: error.stack, chatId }, 'Error in agent loop');
