@@ -1,4 +1,5 @@
 import type { BuiltinTool } from './types.js';
+import { logger } from '../services/logger.js';
 
 export const websearchTool: BuiltinTool = {
     name: 'web_search',
@@ -14,10 +15,12 @@ export const websearchTool: BuiltinTool = {
         const apiKey = process.env.LANGSEARCH_API_KEY;
         
         if (!apiKey) {
+            logger.warn('web_search: LANGSEARCH_API_KEY is missing');
             return "Search failed: LANGSEARCH_API_KEY is not configured in environment variables.";
         }
 
         try {
+            logger.info({ query }, 'web_search: Calling Langsearch API');
             const response = await fetch('https://api.langsearch.com/v1/web-search', {
                 method: 'POST',
                 headers: {
@@ -33,27 +36,32 @@ export const websearchTool: BuiltinTool = {
 
             if (!response.ok) {
                 const errorText = await response.text();
+                logger.error({ status: response.status, errorText }, 'web_search: API call failed');
                 return `Search failed with status ${response.status}: ${errorText}`;
             }
 
             const data = await response.json();
-            // Langsearch response format is similar to Bing/Google Search
-            // It typically has an array of results in `webPages.value` or similar.
-            // Based on the research, it returns results with title, url, snippet, summary.
+            logger.info({ data }, 'web_search: API response received');
             
-            const results = (data.data || data.results || []).slice(0, 5).map((r: any) => ({
-                title: r.title,
+            // Langsearch response format is compatible with Bing Search API
+            // Results are in data.webPages.value
+            const resultsValue = data.webPages?.value || data.data || data.results || [];
+            
+            const results = (resultsValue as any[]).slice(0, 5).map((r: any) => ({
+                title: r.name || r.title,
                 url: r.url,
                 snippet: r.summary || r.snippet || r.content
             }));
 
             if (results.length === 0) {
+                logger.info({ query }, 'web_search: No results found');
                 return `No results found for "${query}".`;
             }
 
             return `Search results for "${query}":\n\n` + 
                 results.map((r: any) => `**${r.title}**\nURL: ${r.url}\n${r.snippet}`).join('\n\n');
         } catch (e: any) {
+            logger.error({ error: e.message }, 'web_search: Unexpected error');
             return `Search failed: ${e.message || 'Unknown error'}`;
         }
     },
