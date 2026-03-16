@@ -43,11 +43,27 @@ export const websearchTool: BuiltinTool = {
             const data = await response.json();
             logger.info({ data }, 'web_search: API response received');
             
-            // Langsearch response format is compatible with Bing Search API
-            // Results are in data.webPages.value
-            const resultsValue = data.webPages?.value || data.data || data.results || [];
+            // Langsearch response format observed in production:
+            // data.data.webPages.value (where 'data' is the root JSON object)
+            // Sometimes it might be data.webPages.value or just data.results
+            let resultsValue: any[] = [];
             
-            const results = (resultsValue as any[]).slice(0, 5).map((r: any) => ({
+            if (data.data?.webPages?.value) {
+                resultsValue = data.data.webPages.value;
+            } else if (data.webPages?.value) {
+                resultsValue = data.webPages.value;
+            } else if (Array.isArray(data.data)) {
+                resultsValue = data.data;
+            } else if (Array.isArray(data.results)) {
+                resultsValue = data.results;
+            }
+            
+            if (!Array.isArray(resultsValue)) {
+                logger.error({ data }, 'web_search: Could not find results array in response');
+                return `Search failed: Unexpected response format from API.`;
+            }
+
+            const results = resultsValue.slice(0, 5).map((r: any) => ({
                 title: r.name || r.title,
                 url: r.url,
                 snippet: r.summary || r.snippet || r.content
