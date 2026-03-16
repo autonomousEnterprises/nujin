@@ -24,15 +24,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // Protect the endpoint with a shared secret.
-    // Supports three formats:
-    //   1. Standard:     Authorization: Bearer <token>
-    //   2. cron-jobs.org quirk: key="Authorization: Bearer", value=<token>
-    //   3. Simple header: X-Cron-Secret: <token>
+    // Supports:
+    //   1. Standard:          Authorization: Bearer <token>
+    //   2. cron-jobs.org key: Authorization: Bearer  (key), <token> (value)
+    //   3. Custom header:     X-Cron-Secret: <token>
+    //   4. Query param:       ?secret=<token>  (useful for debugging)
     const cronSecret = process.env.CRON_SECRET;
+
+    // DEBUG: log all header keys (remove after confirming which key arrives)
+    logger.info({ headerKeys: Object.keys(req.headers) }, 'Incoming cron headers');
+
     if (cronSecret) {
         const standardAuth = req.headers['authorization'];
-        const quirkyAuth   = req.headers['authorization: bearer']; // cron-jobs.org sends this
+        const quirkyAuth   = req.headers['authorization: bearer'];
         const simpleSecret = req.headers['x-cron-secret'];
+        const querySecret  = typeof req.query?.secret === 'string' ? req.query.secret : undefined;
 
         let token: string | undefined;
         if (typeof standardAuth === 'string') {
@@ -41,6 +47,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             token = quirkyAuth.trim();
         } else if (typeof simpleSecret === 'string') {
             token = simpleSecret.trim();
+        } else if (querySecret) {
+            token = querySecret.trim();
         }
 
         if (token !== cronSecret) {
