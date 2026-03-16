@@ -69,3 +69,16 @@ ALTER TABLE processed_updates ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Allow all access" ON processed_updates;
 CREATE POLICY "Allow all access" ON processed_updates FOR ALL USING (true);
 
+-- 6. Agent Tasks Table (Autonomous Agent State Machine)
+CREATE TABLE IF NOT EXISTS agent_tasks (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    chat_id BIGINT UNIQUE NOT NULL,
+    status TEXT DEFAULT 'idle' CHECK (status IN ('idle', 'working', 'awaiting_user')),
+    goal TEXT,
+    task_history JSONB DEFAULT '[]'::jsonb,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+ALTER TABLE agent_tasks ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow all access" ON agent_tasks;
+CREATE POLICY "Allow all access" ON agent_tasks FOR ALL USING (true);

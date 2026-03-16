@@ -152,3 +152,52 @@ export async function saveWallet(wallet: WalletData): Promise<boolean> {
   return true;
 }
 
+// ─── Autonomous Agent State Machine ──────────────────────────────────────────
+
+export interface AgentTask {
+  id?: string;
+  chat_id: number;
+  status: 'idle' | 'working' | 'awaiting_user';
+  goal?: string | null;
+  task_history: Array<{ thought: string; action?: string; result?: string }>;
+  updated_at?: string;
+}
+
+export async function getAgentTask(chatId: number): Promise<AgentTask | null> {
+  const { data, error } = await supabase
+    .from('agent_tasks')
+    .select('*')
+    .eq('chat_id', chatId)
+    .maybeSingle();
+
+  if (error) {
+    logger.error({ error, chatId }, 'Error fetching agent task');
+    return null;
+  }
+  return data as AgentTask | null;
+}
+
+export async function upsertAgentTask(task: Partial<AgentTask> & { chat_id: number }): Promise<boolean> {
+  const { error } = await supabase
+    .from('agent_tasks')
+    .upsert({ ...task, updated_at: new Date().toISOString() }, { onConflict: 'chat_id' });
+
+  if (error) {
+    logger.error({ error, task }, 'Error upserting agent task');
+    return false;
+  }
+  return true;
+}
+
+export async function getWorkingTasks(): Promise<AgentTask[]> {
+  const { data, error } = await supabase
+    .from('agent_tasks')
+    .select('*')
+    .eq('status', 'working');
+
+  if (error) {
+    logger.error({ error }, 'Error fetching working agent tasks');
+    return [];
+  }
+  return data as AgentTask[];
+}

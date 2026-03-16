@@ -5,12 +5,20 @@
     "api/webhook.ts": {
       "memory": 1024,
       "maxDuration": 60
+    },
+    "api/cron.ts": {
+      "memory": 512,
+      "maxDuration": 60
     }
   },
   "routes": [
     {
       "src": "/api/webhook",
       "dest": "api/webhook.ts"
+    },
+    {
+      "src": "/api/cron",
+      "dest": "api/cron.ts"
     },
     {
       "src": "/logo.png",

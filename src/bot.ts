@@ -1,7 +1,7 @@
 import { Bot, GrammyError, HttpError } from 'grammy';
 import * as dotenv from 'dotenv';
-import { getChatHistory, saveChatMessage } from './services/db.js';
-import { processChat, SYSTEM_PROMPT } from './services/ai.js';
+import { getAgentTask, upsertAgentTask } from './services/db.js';
+import { runAgentLoop, SYSTEM_PROMPT } from './services/ai.js';
 import { logger } from './services/logger.js';
 
 dotenv.config();
@@ -39,8 +39,6 @@ process.on('unhandledRejection', (reason, promise) => {
 
 process.on('uncaughtException', (error) => {
     logger.error({ error: error.message, stack: error.stack }, 'Uncaught Exception thrown');
-    // For Vercel, it's often better to let it crash and restart, but we log first
-    // process.exit(1); 
 });
 
 bot.command('start', (ctx) => {
@@ -53,39 +51,66 @@ bot.on('message:text', async (ctx) => {
 
     logger.info({ chatId, userText }, 'Received message');
 
-    // Save user's message
-    await saveChatMessage({
-        chat_id: chatId,
-        role: 'user',
-        content: userText
-    });
-
-    // Load chat history
-    const history = await getChatHistory(chatId);
-    const messages = [
-        { role: 'system', content: SYSTEM_PROMPT },
-        ...history.map((msg: any) => ({
-            role: msg.role,
-            content: msg.content
-        }))
-    ];
+    // Show typing indicator immediately
+    await ctx.replyWithChatAction('typing');
 
     try {
-        const aiResponse = await processChat(messages, chatId);
+        // Load or create the agent task for this chat
+        let task = await getAgentTask(chatId);
 
-        // Indicate typing
-        await ctx.replyWithChatAction('typing');
+        if (!task) {
+            task = {
+                chat_id: chatId,
+                status: 'working',
+                goal: userText,
+                task_history: []
+            };
+        } else {
+            const previousStatus = task.status;
+            // If idle or no history, treat this as a brand new goal
+            if (previousStatus === 'idle' || task.task_history.length === 0) {
+                task.goal = userText;
+                task.task_history = [];
+            } else {
+                // User replied while bot was awaiting_user — append as context
+                task.task_history.push({ thought: `User replied: ${userText}` });
+            }
+            task.status = 'working';
+        }
 
-        // Save AI response
-        await saveChatMessage({
+        // Persist the 'working' state immediately
+        await upsertAgentTask({
             chat_id: chatId,
-            role: 'assistant',
-            content: aiResponse
+            status: 'working',
+            goal: task.goal ?? null,
+            task_history: task.task_history
         });
 
-        await ctx.reply(aiResponse);
+        // Run one iteration of the agent loop
+        const decision = await runAgentLoop(chatId, task);
+
+        // Map decision → DB status
+        const newStatus =
+            decision.decision === 'CONTINUE'       ? 'working'
+            : decision.decision === 'WAIT_FOR_USER' ? 'awaiting_user'
+            : 'idle'; // FINISH
+
+        // Persist updated task_history and new status
+        await upsertAgentTask({
+            chat_id: chatId,
+            status: newStatus,
+            goal: task.goal ?? null,
+            task_history: task.task_history
+        });
+
+        // Send the agent's message to the user
+        await ctx.reply(decision.message_to_telegram);
+
     } catch (error: any) {
-        logger.error({ error: error.message, stack: error.stack, chatId }, 'Error generating AI response');
-        await ctx.reply('Sorry, I encountered an error computing your request.');
+        logger.error({ error: error.message, stack: error.stack, chatId }, 'Error in agent loop');
+        await ctx.reply('Sorry, I encountered an error in my reasoning loop. Please try again.');
     }
 });
+
+// Re-export system prompt for legacy compatibility
+export { SYSTEM_PROMPT };
