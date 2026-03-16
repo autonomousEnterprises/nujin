@@ -23,14 +23,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(405).json({ error: 'Method not allowed. Use POST.' });
     }
 
-    // Protect the endpoint with a shared secret
+    // Protect the endpoint with a shared secret.
+    // Supports three formats:
+    //   1. Standard:     Authorization: Bearer <token>
+    //   2. cron-jobs.org quirk: key="Authorization: Bearer", value=<token>
+    //   3. Simple header: X-Cron-Secret: <token>
     const cronSecret = process.env.CRON_SECRET;
     if (cronSecret) {
-        const authHeader = req.headers['authorization'];
-        const token = authHeader?.replace('Bearer ', '').trim();
+        const standardAuth = req.headers['authorization'];
+        const quirkyAuth   = req.headers['authorization: bearer']; // cron-jobs.org sends this
+        const simpleSecret = req.headers['x-cron-secret'];
+
+        let token: string | undefined;
+        if (typeof standardAuth === 'string') {
+            token = standardAuth.replace(/^Bearer\s+/i, '').trim();
+        } else if (typeof quirkyAuth === 'string') {
+            token = quirkyAuth.trim();
+        } else if (typeof simpleSecret === 'string') {
+            token = simpleSecret.trim();
+        }
+
         if (token !== cronSecret) {
-            console.log(authHeader, token, cronSecret);
-            logger.warn('Unauthorized cron request');
+            logger.warn({ token: token ? '[redacted]' : 'missing' }, 'Unauthorized cron request');
             return res.status(401).json({ error: 'Unauthorized' });
         }
     } else {
