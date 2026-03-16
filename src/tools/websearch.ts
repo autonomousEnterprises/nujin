@@ -1,9 +1,14 @@
 import type { BuiltinTool } from './types.js';
-import * as cheerio from 'cheerio';
+
+const SEARXNG_INSTANCES = [
+    'https://searx.be',
+    'https://baresearch.org',
+    'https://search.mdl2.com'
+];
 
 export const websearchTool: BuiltinTool = {
     name: 'web_search',
-    description: 'Search the web for information using a search query',
+    description: 'Search the web for information using a search query cross multiple search engines',
     parameters: {
         type: 'object',
         properties: {
@@ -12,59 +17,37 @@ export const websearchTool: BuiltinTool = {
         required: ['query'],
     },
     execute: async ({ query }) => {
-        try {
-            // Using DuckDuckGo Lite as a free, no-API-key search alternative.
-            const response = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`, {
-                headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-                    'Accept-Language': 'en-US,en;q=0.5',
-                }
-            });
+        let lastError;
+        
+        for (const instance of SEARXNG_INSTANCES) {
+            try {
+                const url = new URL(`${instance}/search`);
+                url.searchParams.set('q', query);
+                url.searchParams.set('format', 'json');
+                url.searchParams.set('engines', 'google,bing,duckduckgo');
 
-            if (!response.ok) {
-                return `Failed to fetch search results. Status: ${response.status} ${response.statusText}`;
-            }
-
-            const html = await response.text();
-            const $ = cheerio.load(html);
-            
-            const results: string[] = [];
-            
-            // DuckDuckGo Lite HTML structure usually has results in .result-body or similar
-            // We search for snippets within the results
-            $('.result__snippet').each((i, el) => {
-                if (i < 5) {
-                    const text = $(el).text().trim();
-                    if (text) {
-                        results.push(`- ${text}`);
-                    }
-                }
-            });
-
-            // Fallback if the above selector fails (DDG sometimes changes classes)
-            if (results.length === 0) {
-                 $('.web-result').each((i, el) => {
-                    if (i < 5) {
-                        const snippet = $(el).find('.result__snippet').text().trim() || $(el).text().trim();
-                        if (snippet) {
-                            results.push(`- ${snippet}`);
-                        }
-                    }
+                const response = await fetch(url.toString(), {
+                    headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) NujinBot/1.0' }
                 });
-            }
 
-            if (results.length === 0) {
-                // If we still have no results, it might be rate limiting or a major layout change
-                if (html.includes('ddg-laptcha')) {
-                    return "Search blocked by bot detection (Captcha encountered).";
-                }
-                return "No results found. The search provider might be rate-limiting or has changed its layout.";
-            }
+                if (!response.ok) continue;
 
-            return `Top search results for "${query}":\n` + results.join('\n');
-        } catch (e: any) {
-            return `Search failed: ${e.message}`;
+                const data = await response.json();
+                const results = (data.results || []).slice(0, 5).map((r: any) => ({
+                    title: r.title,
+                    url: r.url,
+                    snippet: r.content || r.snippet
+                }));
+
+                if (results.length === 0) continue;
+
+                return `Search results for "${query}":\n\n` + 
+                    results.map((r: any) => `**${r.title}**\nURL: ${r.url}\n${r.snippet}`).join('\n\n');
+            } catch (e: any) {
+                lastError = e;
+                continue;
+            }
         }
+        return `Search failed. All instances failed. Last error: ${lastError?.message || 'Unknown error'}`;
     },
 };
