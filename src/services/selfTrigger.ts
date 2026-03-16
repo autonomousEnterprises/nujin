@@ -24,12 +24,15 @@ export function triggerSelf(): void {
 
     logger.info({ url }, 'triggerSelf: firing next agent loop iteration');
 
-    // Intentionally NOT awaited — fire and forget
+    // Intentionally NOT awaited — fire and forget.
+    // NOTE: Vercel's proxy strips/mangles the Authorization header on
+    // internal function-to-function requests, so we use the custom
+    // X-Cron-Secret header instead (which cron.ts already accepts).
     fetch(url, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${secret}`
+            'X-Cron-Secret': secret
         },
         body: '{}'
     }).catch((err: Error) => {
