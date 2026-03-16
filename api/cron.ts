@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { getWorkingTasks, upsertAgentTask, claimAgentTask } from '../src/services/db.js';
+import { getWorkingTasks, upsertAgentTask, claimAgentTask, saveChatMessage } from '../src/services/db.js';
 import { runAgentLoop } from '../src/services/ai.js';
 import { logger } from '../src/services/logger.js';
 import { triggerSelf } from '../src/services/selfTrigger.js';
@@ -99,6 +99,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             // Always notify the user via Telegram
             if (decision.message_to_telegram) {
                 await sendTelegramMessage(chatId, decision.message_to_telegram);
+                await saveChatMessage({
+                    chat_id: chatId,
+                    role: 'assistant',
+                    content: decision.message_to_telegram
+                });
             }
 
             // If the agent wants to keep going, re-trigger the loop.

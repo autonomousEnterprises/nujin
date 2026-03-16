@@ -1,6 +1,6 @@
 import { Bot, GrammyError, HttpError } from 'grammy';
 import * as dotenv from 'dotenv';
-import { getAgentTask, upsertAgentTask } from './services/db.js';
+import { getAgentTask, upsertAgentTask, saveChatMessage } from './services/db.js';
 import { runAgentLoop, SYSTEM_PROMPT } from './services/ai.js';
 import { logger } from './services/logger.js';
 import { triggerSelf } from './services/selfTrigger.js';
@@ -55,6 +55,13 @@ bot.on('message:text', async (ctx) => {
     // Show typing indicator immediately
     await ctx.replyWithChatAction('typing');
 
+    // Save the user's message to chat history
+    await saveChatMessage({
+        chat_id: chatId,
+        role: 'user',
+        content: userText
+    });
+
     try {
         // Load or create the agent task for this chat
         let task = await getAgentTask(chatId);
@@ -108,6 +115,15 @@ bot.on('message:text', async (ctx) => {
 
         // Send the agent's message to the user
         await ctx.reply(decision.message_to_telegram);
+
+        // Save the agent's response to chat history
+        if (decision.message_to_telegram) {
+            await saveChatMessage({
+                chat_id: chatId,
+                role: 'assistant',
+                content: decision.message_to_telegram
+            });
+        }
 
         // If the agent wants to keep going, kick off the cron loop once.
         // Only bot.ts does this initial kick-off; cron.ts drives all subsequent

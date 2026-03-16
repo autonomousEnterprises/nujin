@@ -2,7 +2,7 @@ import OpenAI from 'openai';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { getDynamicTools, saveDynamicTool, getDynamicSkills, saveDynamicSkill } from './db.js';
+import { getDynamicTools, saveDynamicTool, getDynamicSkills, saveDynamicSkill, getChatHistory } from './db.js';
 import type { AgentTask } from './db.js';
 import { executeDynamicTool } from './tools.js';
 import { builtinTools } from '../tools/index.js';
@@ -221,6 +221,10 @@ export async function runAgentLoop(
     logger.info({ chatId, status: task.status, goal: task.goal }, 'Running agent loop');
 
     const dynamicTools = await getDynamicTools();
+    const chatHistoryReversed = await getChatHistory(chatId, 10);
+    
+    // Format chat history for the prompt
+    const chatHistory = chatHistoryReversed.map(m => `[${m.role.toUpperCase()}]: ${m.content}`).join('\n');
 
     // Build the available tool names for the LLM to reference
     const toolNames = [
@@ -230,6 +234,7 @@ export async function runAgentLoop(
 
     const userContent = JSON.stringify({
         goal: task.goal || '(no goal set)',
+        recent_chat_history: chatHistory || '(no previous messages)',
         task_history: task.task_history,
         available_tools: toolNames
     });
