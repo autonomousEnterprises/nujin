@@ -13,17 +13,27 @@ import { logger } from './logger.js';
  * its HTTP response, so any un-awaited fetch() would be suspended and never
  * actually transmitted.
  *
- * Uses Vercel's auto-injected VERCEL_URL env var — no manual config needed.
+ * URL resolution order (first non-empty wins):
+ *   1. APP_URL env var  — stable production alias, e.g. https://nujin.vercel.app
+ *   2. VERCEL_URL       — auto-injected deployment URL (bare hostname, no https://)
  */
 export async function triggerSelf(): Promise<void> {
+    // Prefer a stable production alias if one is configured
+    const appUrl = process.env.APP_URL;
     const vercelUrl = process.env.VERCEL_URL;
-    if (!vercelUrl) {
-        logger.warn('triggerSelf: VERCEL_URL not set — cannot self-trigger');
+
+    let base: string | undefined;
+    if (appUrl) {
+        base = appUrl; // already includes https://
+    } else if (vercelUrl) {
+        base = vercelUrl.startsWith('http') ? vercelUrl : `https://${vercelUrl}`;
+    }
+
+    if (!base) {
+        logger.warn('triggerSelf: neither APP_URL nor VERCEL_URL is set — cannot self-trigger');
         return;
     }
 
-    // VERCEL_URL is the bare hostname (no protocol)
-    const base = vercelUrl.startsWith('http') ? vercelUrl : `https://${vercelUrl}`;
     const secret = process.env.CRON_SECRET ?? '';
     const url = `${base}/api/cron`;
 
@@ -36,7 +46,7 @@ export async function triggerSelf(): Promise<void> {
     const timer = setTimeout(() => controller.abort(), 800);
 
     try {
-        await fetch(url, {
+        const res = await fetch(url, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -47,7 +57,17 @@ export async function triggerSelf(): Promise<void> {
             body: '{}',
             signal: controller.signal
         });
-        logger.info('triggerSelf: response received (faster than abort)');
+
+        // Log status so we can diagnose auth failures or empty-task responses
+        if (res.ok) {
+            let body: any = {};
+            try { body = await res.json(); } catch {}
+            logger.info({ status: res.status, body }, 'triggerSelf: cron responded OK');
+        } else {
+            let text = '';
+            try { text = await res.text(); } catch {}
+            logger.warn({ status: res.status, body: text }, 'triggerSelf: cron responded with error');
+        }
     } catch (err: any) {
         if (err?.name === 'AbortError') {
             // Expected — we cancelled our side; Vercel's new invocation is running
