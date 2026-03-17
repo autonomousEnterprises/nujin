@@ -1,6 +1,7 @@
 {
   "version": 2,
   "outputDirectory": "dist",
+  "cleanUrls": true,
   "functions": {
     "api/webhook.ts": {
       "memory": 1024,
