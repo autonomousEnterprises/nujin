@@ -43,7 +43,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         let token: string | undefined;
         if (typeof standardAuth === 'string') {
-            token = standardAuth.replace(/^Bearer\s+/i, '').trim();
+            token = standardAuth.replace(/^Bearer:?\s+/i, '').trim();
         } else if (typeof quirkyAuth === 'string') {
             token = quirkyAuth.trim();
         } else if (typeof simpleSecret === 'string') {
