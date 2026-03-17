@@ -52,7 +52,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             token = querySecret.trim();
         }
 
-        if (token !== cronSecret || token !== `Bearer ${cronSecret}`) {
+        if (token !== cronSecret && token !== `Bearer ${cronSecret}`) {
             console.log(token, cronSecret);
             logger.warn({ token: token ? '[redacted]' : 'missing' }, 'Unauthorized cron request');
             return res.status(401).json({ error: 'Unauthorized' });
