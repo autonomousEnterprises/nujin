@@ -37,9 +37,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (cronSecret) {
         const standardAuth = req.headers['authorization'];
-        const quirkyAuth   = req.headers['authorization: bearer'];
+        const quirkyAuth = req.headers['authorization: bearer'];
         const simpleSecret = req.headers['x-cron-secret'];
-        const querySecret  = typeof req.query?.secret === 'string' ? req.query.secret : undefined;
+        const querySecret = typeof req.query?.secret === 'string' ? req.query.secret : undefined;
 
         let token: string | undefined;
         if (typeof standardAuth === 'string') {
@@ -52,7 +52,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             token = querySecret.trim();
         }
 
-        if (token !== cronSecret) {
+        if (token !== cronSecret || token !== `Bearer ${process.env.CRON_SECRET}`) {
             logger.warn({ token: token ? '[redacted]' : 'missing' }, 'Unauthorized cron request');
             return res.status(401).json({ error: 'Unauthorized' });
         }
