@@ -31,23 +31,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     logger.info({ headerKeys: Object.keys(req.headers) }, 'Incoming cron headers');
 
     if (cronSecret) {
-        const standardAuth = req.headers['authorization'];
-        const quirkyAuth = req.headers['authorization: bearer'];
-        const simpleSecret = req.headers['x-cron-secret'];
-        const querySecret = typeof req.query?.secret === 'string' ? req.query.secret : undefined;
+        const token = req.headers['authorization'];
 
-        let token: string | undefined;
-        if (typeof standardAuth === 'string') {
-            token = standardAuth.replace(/^Bearer:?\s+/i, '').trim();
-        } else if (typeof quirkyAuth === 'string') {
-            token = quirkyAuth.trim();
-        } else if (typeof simpleSecret === 'string') {
-            token = simpleSecret.trim();
-        } else if (querySecret) {
-            token = querySecret.trim();
-        }
-
-        if (token !== cronSecret && token !== `Bearer ${cronSecret}`) {
+        if (token !== `Bearer ${cronSecret}`) {
             console.log(token, cronSecret);
             logger.warn({ token: token ? '[redacted]' : 'missing' }, 'Unauthorized cron request');
             return res.status(401).json({ error: 'Unauthorized' });

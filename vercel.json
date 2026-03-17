@@ -18,10 +18,6 @@
       "dest": "api/webhook.ts"
     },
     {
-      "src": "/api/cron",
-      "dest": "api/cron.ts"
-    },
-    {
       "src": "/logo.png",
       "dest": "/logo.png"
     },
