@@ -111,9 +111,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             // MUST be awaited so the HTTP request reaches Vercel before this
             // invocation returns (Vercel freezes the process on response,
             // killing any unawaited fetch).
-            if (decision.decision === 'CONTINUE') {
-                await triggerSelf();
-            }
+            // if (decision.decision === 'CONTINUE') {
+            //    await triggerSelf();
+            // }
 
             results.push({ chatId, decision: decision.decision, status: newStatus });
         } catch (err: any) {
