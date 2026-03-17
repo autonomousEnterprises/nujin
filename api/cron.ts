@@ -2,7 +2,6 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getWorkingTasks, upsertAgentTask, claimAgentTask, saveChatMessage } from '../src/services/db.js';
 import { runAgentLoop } from '../src/services/ai.js';
 import { logger } from '../src/services/logger.js';
-import { triggerSelf } from '../src/services/selfTrigger.js';
 
 const TELEGRAM_API = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}`;
 
@@ -19,96 +18,94 @@ async function sendTelegramMessage(chatId: number, text: string): Promise<void> 
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-    // Protect the endpoint with a shared secret.
-    // Supports:
-    //   1. Standard:          Authorization: Bearer <token>
-    //   2. cron-jobs.org key: Authorization: Bearer  (key), <token> (value)
-    //   3. Custom header:     X-Cron-Secret: <token>
-    //   4. Query param:       ?secret=<token>  (useful for debugging)
     const cronSecret = process.env.CRON_SECRET;
 
-    // DEBUG: log all header keys (remove after confirming which key arrives)
-    logger.info({ headerKeys: Object.keys(req.headers) }, 'Incoming cron headers');
-
+    // 1. Robust Authentication Logic
     if (cronSecret) {
-        const token = req.headers['authorization'];
+        const authHeader = req.headers['authorization'];
 
-        if (token !== `Bearer ${cronSecret}`) {
-            console.log(token, cronSecret);
-            logger.warn({ token: token ? '[redacted]' : 'missing' }, 'Unauthorized cron request');
+        // This regex handles:
+        // "Bearer token"
+        // "Bearer: token" (common with cron-job.org)
+        // It's case-insensitive and trims whitespace.
+        const token = typeof authHeader === 'string'
+            ? authHeader.replace(/^Bearer:?\s+/i, '').trim()
+            : null;
+
+        if (!token || token !== cronSecret) {
+            logger.warn({
+                received: token ? '[redacted]' : 'missing',
+                headerProvided: !!authHeader
+            }, 'Unauthorized cron request');
             return res.status(401).json({ error: 'Unauthorized' });
         }
     } else {
-        logger.warn('CRON_SECRET is not set — cron endpoint is unprotected!');
+        logger.warn('CRON_SECRET is not set — endpoint is unprotected!');
     }
 
     logger.info('Cron heartbeat triggered');
 
-    // Fetch all tasks currently in the 'working' state
-    const workingTasks = await getWorkingTasks();
-    logger.info({ count: workingTasks.length }, 'Found working tasks');
+    try {
+        // 2. Fetch all tasks currently in the 'working' state
+        const workingTasks = await getWorkingTasks();
+        logger.info({ count: workingTasks.length }, 'Found working tasks');
 
-    const results: Array<{ chatId: number; decision: string; status: string }> = [];
+        const results: Array<{ chatId: number; decision: string; status: string }> = [];
 
-    for (const task of workingTasks) {
-        const chatId = task.chat_id;
-        logger.info({ chatId, goal: task.goal }, 'Processing working task');
+        for (const task of workingTasks) {
+            const chatId = task.chat_id;
 
-        // Atomically claim the task (working → processing).
-        // If this returns false, another cron invocation already claimed it — skip.
-        const claimed = await claimAgentTask(chatId);
-        if (!claimed) {
-            logger.info({ chatId }, 'Task already claimed by another invocation — skipping');
-            continue;
-        }
-
-        try {
-            const decision = await runAgentLoop(chatId, task);
-
-            const newStatus =
-                decision.decision === 'CONTINUE' ? 'working'
-                    : decision.decision === 'WAIT_FOR_USER' ? 'awaiting_user'
-                        : 'idle'; // FINISH
-
-            // Persist updated state
-            await upsertAgentTask({
-                chat_id: chatId,
-                status: newStatus,
-                goal: task.goal ?? null,
-                task_history: task.task_history
-            });
-
-            // Always notify the user via Telegram
-            if (decision.message_to_telegram) {
-                await sendTelegramMessage(chatId, decision.message_to_telegram);
-                await saveChatMessage({
-                    chat_id: chatId,
-                    role: 'assistant',
-                    content: decision.message_to_telegram
-                });
+            // Atomically claim the task (working → processing).
+            const claimed = await claimAgentTask(chatId);
+            if (!claimed) {
+                logger.info({ chatId }, 'Task already claimed or busy — skipping');
+                continue;
             }
 
-            // If the agent wants to keep going, re-trigger the loop.
-            // MUST be awaited so the HTTP request reaches Vercel before this
-            // invocation returns (Vercel freezes the process on response,
-            // killing any unawaited fetch).
-            // if (decision.decision === 'CONTINUE') {
-            //    await triggerSelf();
-            // }
+            try {
+                const decision = await runAgentLoop(chatId, task);
 
-            results.push({ chatId, decision: decision.decision, status: newStatus });
-        } catch (err: any) {
-            logger.error({ err: err.message, chatId }, 'Error processing task in cron');
-            // Mark as awaiting_user so it doesn't loop endlessly on errors
-            await upsertAgentTask({ chat_id: chatId, status: 'awaiting_user', task_history: task.task_history });
-            await sendTelegramMessage(chatId, '⚠️ An error occurred in my background loop. I\'ll need your input to continue.');
-            results.push({ chatId, decision: 'ERROR', status: 'awaiting_user' });
+                const newStatus =
+                    decision.decision === 'CONTINUE' ? 'working'
+                        : decision.decision === 'WAIT_FOR_USER' ? 'awaiting_user'
+                            : 'idle';
+
+                // Persist updated state
+                await upsertAgentTask({
+                    chat_id: chatId,
+                    status: newStatus,
+                    goal: task.goal ?? null,
+                    task_history: task.task_history
+                });
+
+                // Notify user via Telegram
+                if (decision.message_to_telegram) {
+                    await sendTelegramMessage(chatId, decision.message_to_telegram);
+                    await saveChatMessage({
+                        chat_id: chatId,
+                        role: 'assistant',
+                        content: decision.message_to_telegram
+                    });
+                }
+
+                results.push({ chatId, decision: decision.decision, status: newStatus });
+            } catch (err: any) {
+                logger.error({ err: err.message, chatId }, 'Error processing task in cron');
+                // Recovery: mark as awaiting_user so it doesn't loop endlessly on errors
+                await upsertAgentTask({ chat_id: chatId, status: 'awaiting_user', task_history: task.task_history });
+                await sendTelegramMessage(chatId, '⚠️ An error occurred in my background loop. I\'ll need your input to continue.');
+                results.push({ chatId, decision: 'ERROR', status: 'awaiting_user' });
+            }
         }
-    }
 
-    return res.status(200).json({
-        status: 'ok',
-        processed: results.length,
-        results
-    });
+        return res.status(200).json({
+            status: 'ok',
+            processed: results.length,
+            results
+        });
+
+    } catch (globalErr: any) {
+        logger.error({ err: globalErr.message }, 'Fatal error in cron handler');
+        return res.status(500).json({ error: 'Internal Server Error' });
+    }
 }
