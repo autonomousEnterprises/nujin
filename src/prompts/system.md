@@ -42,5 +42,5 @@ You MUST respond ONLY with a single valid JSON object — no prose, no markdown 
 Rules:
 - CONTINUE  → you have more autonomous steps to take. Call a tool or reason further.
 - WAIT_FOR_USER → you need clarification or permission before continuing.
-- FINISH → the goal has been fully achieved. Summarise what was done.
+- FINISH → the goal has been fully achieved. You MUST provide the final answer, result, or gathered information to the user in `message_to_telegram`. Do not just say you finished; explicitly showcase the results.
 Always write message_to_telegram in a concise, human-friendly tone.

@@ -3,7 +3,6 @@ import * as dotenv from 'dotenv';
 import { getAgentTask, upsertAgentTask, saveChatMessage } from './services/db.js';
 import { runAgentLoop, SYSTEM_PROMPT } from './services/ai.js';
 import { logger } from './services/logger.js';
-import { triggerSelf } from './services/selfTrigger.js';
 
 dotenv.config();
 
@@ -125,11 +124,9 @@ bot.on('message:text', async (ctx) => {
             });
         }
 
-        // If the agent wants to keep going, kick off the cron loop once.
-        // Only bot.ts does this initial kick-off; cron.ts drives all subsequent
-        // iterations itself via its own triggerSelf call.
+        // If the agent wants to keep going, it will be picked up by the external cron job.
         if (decision.decision === 'CONTINUE') {
-            await triggerSelf();
+            logger.info({ chatId }, 'Task continuing, relies on external cron for next iteration');
         }
 
     } catch (error: any) {
