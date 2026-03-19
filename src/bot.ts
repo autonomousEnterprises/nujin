@@ -102,7 +102,7 @@ bot.on('message:text', async (ctx) => {
         const newStatus =
             decision.decision === 'CONTINUE' ? 'working'
                 : decision.decision === 'WAIT_FOR_USER' ? 'awaiting_user'
-                    : 'FINISH'; // FINISH
+                    : 'idle'; // FINISH
 
         // Persist updated task_history and new status
         await upsertAgentTask({
