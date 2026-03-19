@@ -100,9 +100,9 @@ bot.on('message:text', async (ctx) => {
 
         // Map decision → DB status
         const newStatus =
-            decision.decision === 'CONTINUE'       ? 'working'
-            : decision.decision === 'WAIT_FOR_USER' ? 'awaiting_user'
-            : 'idle'; // FINISH
+            decision.decision === 'CONTINUE' ? 'working'
+                : decision.decision === 'WAIT_FOR_USER' ? 'awaiting_user'
+                    : 'FINISH'; // FINISH
 
         // Persist updated task_history and new status
         await upsertAgentTask({
