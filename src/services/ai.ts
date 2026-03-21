@@ -68,7 +68,7 @@ export async function runAgentLoop(
     let raw: string;
     try {
         const response = await openai.chat.completions.create({
-            model: 'openrouter/free',
+            model: 'gpt-4o-mini',
             messages: [
                 { role: 'system', content: SYSTEM_PROMPT },
                 { role: 'user', content: userContent }
