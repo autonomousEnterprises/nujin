@@ -48,7 +48,7 @@ Create a `.env` file or set these in Vercel:
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token
 SUPABASE_URL=your_supabase_url
 SUPABASE_KEY=your_supabase_service_role_key
-OPENAI_API_KEY=your_openai_api_key
+OPENROUTER_API_KEY=your_openrouter_api_key
 CRON_SECRET=a_random_secret_string
 LANGSEARCH_API_KEY=your_langsearch_api_key
 ```

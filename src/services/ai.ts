@@ -10,7 +10,12 @@ import { getAvailableSkills, readSkillContent } from './skills.js';
 import { logger } from './logger.js';
 
 const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
+    apiKey: process.env.OPENROUTER_API_KEY || process.env.OPENAI_API_KEY,
+    baseURL: 'https://openrouter.ai/api/v1',
+    defaultHeaders: {
+        'HTTP-Referer': 'https://nujin.ai', // Optional, for OpenRouter rankings
+        'X-Title': 'Nujin AI',             // Optional, for OpenRouter rankings
+    }
 });
 
 const __filename = fileURLToPath(import.meta.url);
@@ -68,7 +73,7 @@ export async function runAgentLoop(
     let raw: string;
     try {
         const response = await openai.chat.completions.create({
-            model: 'gpt-4o-mini',
+            model: 'openrouter/free',
             messages: [
                 { role: 'system', content: SYSTEM_PROMPT },
                 { role: 'user', content: userContent }
