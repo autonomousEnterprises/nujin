@@ -42,17 +42,14 @@ export interface AgentDecision {
 
 export async function runAgentLoop(
     chatId: number,
-    task: AgentTask
+    task?: AgentTask
 ): Promise<AgentDecision> {
-    logger.info({ chatId, status: task.status, goal: task.goal }, 'Running agent loop');
+    logger.info({ chatId, status: task?.status, goal: task?.goal }, 'Running agent loop');
 
     const dynamicTools = await getDynamicTools();
     const chatHistoryReversed = await getChatHistory(chatId, 10);
-
-    // Format chat history for the prompt
     const chatHistory = chatHistoryReversed.map(m => `[${m.role.toUpperCase()}]: ${m.content}`).join('\n');
 
-    // Build the available tool documentation for the LLM to reference
     const toolDocs = [
         ...builtinTools.map(t => ({
             name: t.name,
@@ -62,80 +59,106 @@ export async function runAgentLoop(
         ...dynamicTools.map(t => ({
             name: t.name,
             description: t.description,
-            parameters: { type: 'object', properties: {}, required: [] } // Dynamic tools are simpler but we should at least give the description
+            parameters: { type: 'object', properties: {}, required: [] }
         }))
     ];
 
-    const userContent = JSON.stringify({
-        goal: task.goal || '(no goal set)',
-        recent_chat_history: chatHistory || '(no previous messages)',
-        task_history: task.task_history,
-        available_tools: toolDocs
-    });
+    const maxChatIterations = 5;
+    let iterations = 0;
+    const localHistory = task ? [...task.task_history] : [];
 
-    let raw: string;
-    try {
-        const response = await openai.chat.completions.create({
-            model: 'gpt-4o-mini',
-            messages: [
-                { role: 'system', content: SYSTEM_PROMPT },
-                { role: 'user', content: userContent }
-            ],
-            response_format: { type: 'json_object' }
+    while (iterations < maxChatIterations) {
+        iterations++;
+
+        const userContent = JSON.stringify({
+            goal: task?.goal || '(standard chat - no active goal)',
+            recent_chat_history: chatHistory || '(no previous messages)',
+            task_history: localHistory,
+            available_tools: toolDocs,
+            mode: task ? 'AUTONOMOUS' : 'CHAT'
         });
-        raw = response.choices[0]?.message?.content || '{}';
-    } catch (err: any) {
-        logger.error({ err: err.message, chatId }, 'LLM call failed in runAgentLoop');
-        return {
-            thought: 'LLM call failed.',
-            decision: 'WAIT_FOR_USER',
-            message_to_telegram: '⚠️ I hit an error during my reasoning loop. Please check back shortly.'
-        };
-    }
 
-    let parsed: AgentDecision;
-    try {
-        parsed = JSON.parse(raw);
-    } catch {
-        logger.warn({ raw, chatId }, 'Failed to parse agent JSON response');
-        return {
-            thought: raw,
-            decision: 'WAIT_FOR_USER',
-            message_to_telegram: '⚠️ I produced an unexpected response. Please try again.'
-        };
-    }
-
-    // If the agent wants to call a tool, execute it
-    let toolResult: string | undefined;
-    if (parsed.tool_to_call) {
-        const toolArgs = parsed.tool_args || {};
-        const builtIn = builtinTools.find(t => t.name === parsed.tool_to_call);
-        const dynamic = dynamicTools.find(t => t.name === parsed.tool_to_call);
-
+        let raw: string;
         try {
-            if (builtIn) {
-                const res = await builtIn.execute(toolArgs, { chatId });
-                toolResult = typeof res === 'string' ? res : JSON.stringify(res);
-            } else if (dynamic) {
-                const res = await executeDynamicTool(dynamic.code, toolArgs);
-                toolResult = typeof res === 'string' ? res : JSON.stringify(res);
-            } else {
-                toolResult = `Tool "${parsed.tool_to_call}" not found.`;
-            }
-        } catch (e: any) {
-            toolResult = `Tool error: ${e.message}`;
+            const response = await openai.chat.completions.create({
+                model: 'gpt-4o-mini',
+                messages: [
+                    { role: 'system', content: SYSTEM_PROMPT },
+                    { role: 'user', content: userContent }
+                ],
+                response_format: { type: 'json_object' }
+            });
+            raw = response.choices[0]?.message?.content || '{}';
+        } catch (err: any) {
+            logger.error({ err: err.message, chatId }, 'LLM call failed in runAgentLoop');
+            return {
+                thought: 'LLM call failed.',
+                decision: 'WAIT_FOR_USER',
+                message_to_telegram: '⚠️ I hit an error during my reasoning loop. Please check back shortly.'
+            };
         }
 
-        logger.info({ chatId, tool: parsed.tool_to_call, toolResult }, 'Agent tool executed');
+        let parsed: AgentDecision;
+        try {
+            parsed = JSON.parse(raw);
+        } catch {
+            logger.warn({ raw, chatId }, 'Failed to parse agent JSON response');
+            return {
+                thought: raw,
+                decision: 'WAIT_FOR_USER',
+                message_to_telegram: '⚠️ I produced an unexpected response. Please try again.'
+            };
+        }
+
+        // Execute tool if requested
+        let toolResult: string | undefined;
+        if (parsed.tool_to_call) {
+            const toolArgs = parsed.tool_args || {};
+            const builtIn = builtinTools.find(t => t.name === parsed.tool_to_call);
+            const dynamic = dynamicTools.find(t => t.name === parsed.tool_to_call);
+
+            try {
+                if (builtIn) {
+                    const res = await builtIn.execute(toolArgs, { chatId });
+                    toolResult = typeof res === 'string' ? res : JSON.stringify(res);
+                } else if (dynamic) {
+                    const res = await executeDynamicTool(dynamic.code, toolArgs);
+                    toolResult = typeof res === 'string' ? res : JSON.stringify(res);
+                } else {
+                    toolResult = `Tool "${parsed.tool_to_call}" not found.`;
+                }
+            } catch (e: any) {
+                toolResult = `Tool error: ${e.message}`;
+            }
+            logger.info({ chatId, tool: parsed.tool_to_call, toolResult }, 'Agent tool executed');
+        }
+
+        // Update local history
+        const historyEntry: { thought: string; action?: string; result?: string } = {
+            thought: parsed.thought
+        };
+        if (parsed.tool_to_call) historyEntry.action = parsed.tool_to_call;
+        if (toolResult !== undefined) historyEntry.result = toolResult;
+        localHistory.push(historyEntry);
+
+        // In autonomous mode, return after one step to allow persistence and cron orchestration
+        if (task) {
+            task.task_history = localHistory;
+            return parsed;
+        }
+
+        // In chat mode, if a tool was called, we loop back to let the LLM see the result and respond
+        if (parsed.tool_to_call) {
+            continue;
+        }
+
+        // Final response from the LLM
+        return parsed;
     }
 
-    // Append this step to task_history (caller is responsible for persisting)
-    const historyEntry: { thought: string; action?: string; result?: string } = {
-        thought: parsed.thought
+    return {
+        thought: 'Hit max iterations in chat mode.',
+        decision: 'WAIT_FOR_USER',
+        message_to_telegram: '⚠️ I took too many steps. Please simplify your request.'
     };
-    if (parsed.tool_to_call) historyEntry.action = parsed.tool_to_call;
-    if (toolResult !== undefined) historyEntry.result = toolResult;
-    task.task_history.push(historyEntry);
-
-    return parsed;
 }

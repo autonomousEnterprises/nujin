@@ -62,71 +62,66 @@ bot.on('message:text', async (ctx) => {
     });
 
     try {
-        // Load or create the agent task for this chat
+        // Load the agent task for this chat
         let task = await getAgentTask(chatId);
 
-        if (!task) {
-            task = {
+        // Determine if there is an active autonomous process
+        const isActive = task && (task.status === 'working' || task.status === 'awaiting_user');
+
+        if (isActive) {
+            // mode: AUTONOMOUS (resuming/responding to an active task)
+            task.task_history.push({
+                thought: `User replied: ${userText}`
+            });
+            task.status = 'working';
+            
+            // Persist state before running the loop
+            await upsertAgentTask({
                 chat_id: chatId,
                 status: 'working',
-                goal: userText,
-                task_history: []
-            };
-        } else {
-            // If the goal is not set, this is a brand new task.
-            // Otherwise, it's a follow-up or reply to an existing task.
-            if (!task.goal || task.goal.trim() === '') {
-                task.goal = userText;
-                task.task_history = [];
-            } else {
-                // Append the user's message as a new entry in task_history so the AI has context.
-                task.task_history.push({
-                    thought: `User replied: ${userText}`
+                goal: task.goal ?? null,
+                task_history: task.task_history
+            });
+
+            // Run one iteration of the agent loop
+            const decision = await runAgentLoop(chatId, task);
+
+            // Update task status and persist results
+            const newStatus =
+                decision.decision === 'CONTINUE' ? 'working'
+                    : decision.decision === 'WAIT_FOR_USER' ? 'awaiting_user'
+                        : 'idle'; // FINISH
+
+            await upsertAgentTask({
+                chat_id: chatId,
+                status: newStatus,
+                goal: newStatus === 'idle' ? null : (task.goal ?? null),
+                task_history: newStatus === 'idle' ? [] : task.task_history
+            });
+
+            // Deliver response
+            await ctx.reply(decision.message_to_telegram);
+            if (decision.message_to_telegram) {
+                await saveChatMessage({
+                    chat_id: chatId,
+                    role: 'assistant',
+                    content: decision.message_to_telegram
                 });
             }
-            task.status = 'working';
-        }
+        } else {
+            // mode: CHAT (standard conversational mode)
+            // The loop will handle any immediate tool calls internally and return a final synthesis
+            const decision = await runAgentLoop(chatId, undefined);
 
-        // Persist the 'working' state immediately
-        await upsertAgentTask({
-            chat_id: chatId,
-            status: 'working',
-            goal: task.goal ?? null,
-            task_history: task.task_history
-        });
-
-        // Run one iteration of the agent loop
-        const decision = await runAgentLoop(chatId, task);
-
-        // Map decision → DB status
-        const newStatus =
-            decision.decision === 'CONTINUE' ? 'working'
-                : decision.decision === 'WAIT_FOR_USER' ? 'awaiting_user'
-                    : 'idle'; // FINISH
-
-        // Persist updated task_history and new status
-        await upsertAgentTask({
-            chat_id: chatId,
-            status: newStatus,
-            goal: task.goal ?? null,
-            task_history: task.task_history
-        });
-
-        // Send the agent's message to the user
-        await ctx.reply(decision.message_to_telegram);
-
-        // Save the agent's response to chat history
-        if (decision.message_to_telegram) {
-            await saveChatMessage({
-                chat_id: chatId,
-                role: 'assistant',
-                content: decision.message_to_telegram
-            });
-        }
-
-        // If the agent wants to keep going, it will be picked up by the external cron job.
-        if (decision.decision === 'CONTINUE') {
-            logger.info({ chatId }, 'Task continuing, relies on external cron for next iteration');
+            // Deliver response
+            await ctx.reply(decision.message_to_telegram);
+            if (decision.message_to_telegram) {
+                await saveChatMessage({
+                    chat_id: chatId,
+                    role: 'assistant',
+                    content: decision.message_to_telegram
+                });
+            }
         }
 
     } catch (error: any) {
