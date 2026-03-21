@@ -30,7 +30,7 @@ export const websearchTool: BuiltinTool = {
                 body: JSON.stringify({
                     query,
                     count: 5,
-                    // summary: true
+                    summary: false
                 })
             });
 
