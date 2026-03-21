@@ -10,12 +10,7 @@ import { getAvailableSkills, readSkillContent } from './skills.js';
 import { logger } from './logger.js';
 
 const openai = new OpenAI({
-    apiKey: process.env.OPENROUTER_API_KEY || process.env.OPENAI_API_KEY,
-    baseURL: 'https://openrouter.ai/api/v1',
-    defaultHeaders: {
-        'HTTP-Referer': 'https://nujin.ai', // Optional, for OpenRouter rankings
-        'X-Title': 'Nujin AI',             // Optional, for OpenRouter rankings
-    }
+    apiKey: process.env.OPENAI_API_KEY,
 });
 
 const __filename = fileURLToPath(import.meta.url);
@@ -53,7 +48,7 @@ export async function runAgentLoop(
 
     const dynamicTools = await getDynamicTools();
     const chatHistoryReversed = await getChatHistory(chatId, 10);
-    
+
     // Format chat history for the prompt
     const chatHistory = chatHistoryReversed.map(m => `[${m.role.toUpperCase()}]: ${m.content}`).join('\n');
 
