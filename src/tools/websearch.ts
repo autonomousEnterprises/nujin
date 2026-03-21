@@ -13,7 +13,7 @@ export const websearchTool: BuiltinTool = {
     },
     execute: async ({ query }) => {
         const apiKey = process.env.LANGSEARCH_API_KEY;
-        
+
         if (!apiKey) {
             logger.warn('web_search: LANGSEARCH_API_KEY is missing');
             return "Search failed: LANGSEARCH_API_KEY is not configured in environment variables.";
@@ -30,7 +30,7 @@ export const websearchTool: BuiltinTool = {
                 body: JSON.stringify({
                     query,
                     count: 5,
-                    summary: true
+                    // summary: true
                 })
             });
 
@@ -42,12 +42,12 @@ export const websearchTool: BuiltinTool = {
 
             const data = await response.json();
             logger.info({ data }, 'web_search: API response received');
-            
+
             // Langsearch response format observed in production:
             // data.data.webPages.value (where 'data' is the root JSON object)
             // Sometimes it might be data.webPages.value or just data.results
             let resultsValue: any[] = [];
-            
+
             if (data.data?.webPages?.value) {
                 resultsValue = data.data.webPages.value;
             } else if (data.webPages?.value) {
@@ -57,7 +57,7 @@ export const websearchTool: BuiltinTool = {
             } else if (Array.isArray(data.results)) {
                 resultsValue = data.results;
             }
-            
+
             if (!Array.isArray(resultsValue)) {
                 logger.error({ data }, 'web_search: Could not find results array in response');
                 return `Search failed: Unexpected response format from API.`;
@@ -74,7 +74,7 @@ export const websearchTool: BuiltinTool = {
                 return `No results found for "${query}".`;
             }
 
-            return `Search results for "${query}":\n\n` + 
+            return `Search results for "${query}":\n\n` +
                 results.map((r: any) => `**${r.title}** ([Source Link](${r.url}))\n${r.snippet}`).join('\n\n');
         } catch (e: any) {
             logger.error({ error: e.message }, 'web_search: Unexpected error');
