@@ -52,17 +52,25 @@ export async function runAgentLoop(
     // Format chat history for the prompt
     const chatHistory = chatHistoryReversed.map(m => `[${m.role.toUpperCase()}]: ${m.content}`).join('\n');
 
-    // Build the available tool names for the LLM to reference
-    const toolNames = [
-        ...builtinTools.map(t => t.name),
-        ...dynamicTools.map(t => t.name)
+    // Build the available tool documentation for the LLM to reference
+    const toolDocs = [
+        ...builtinTools.map(t => ({
+            name: t.name,
+            description: t.description,
+            parameters: t.parameters
+        })),
+        ...dynamicTools.map(t => ({
+            name: t.name,
+            description: t.description,
+            parameters: { type: 'object', properties: {}, required: [] } // Dynamic tools are simpler but we should at least give the description
+        }))
     ];
 
     const userContent = JSON.stringify({
         goal: task.goal || '(no goal set)',
         recent_chat_history: chatHistory || '(no previous messages)',
         task_history: task.task_history,
-        available_tools: toolNames
+        available_tools: toolDocs
     });
 
     let raw: string;

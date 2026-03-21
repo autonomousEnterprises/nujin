@@ -4,7 +4,7 @@ import { saveWallet, getWallets } from '../../services/db.js';
 
 export const web3Tool: BuiltinTool = {
     name: 'web3',
-    description: 'Perform Web3 operations, programmatically interacting with blockchains. Currently supports Solana.',
+    description: 'Perform Web3 and onchain operations, including creating/listing Solana wallets, checking balances, and sending tokens.',
     parameters: {
         type: 'object',
         properties: {
