@@ -2,7 +2,7 @@ import OpenAI from 'openai';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { getDynamicTools, saveDynamicTool, getDynamicSkills, saveDynamicSkill, getChatHistory, searchChatHistory, searchAgentMemories } from './db.js';
+import { getDynamicTools, saveDynamicTool, getDynamicSkills, saveDynamicSkill, getChatHistory, searchChatHistory, searchAgentMemories, upsertAgentTask } from './db.js';
 import type { AgentTask } from './db.js';
 import { executeDynamicTool } from './tools.js';
 import { builtinTools } from '../tools/index.js';
@@ -86,12 +86,17 @@ export async function runAgentLoop(
         }
     }
 
-    const maxChatIterations = 5;
-    let iterations = 0;
+    const startTime = Date.now();
+    const isVercel = process.env.VERCEL === '1';
     const localHistory = task ? [...task.task_history] : [];
 
-    while (iterations < maxChatIterations) {
-        iterations++;
+    while (true) {
+        // Smart Environmental Yield: On Vercel, we must return a response before the 10s timeout 
+        // to avoid the process being killed. We yield after 8s, save state, and let CRON resume.
+        if (isVercel && (Date.now() - startTime) > 8000) {
+            logger.info({ chatId }, 'Nearing Vercel timeout. Yielding to background cron.');
+            break;
+        }
 
         const userContent = JSON.stringify({
             goal: task?.goal || '(standard chat - no active goal)',
@@ -180,9 +185,18 @@ export async function runAgentLoop(
         return parsed;
     }
 
+    // Instead of failing and abandoning the goal, we seamlessly escalate this 
+    // into an autonomous task so it can continue indefinitely in the background!
+    await upsertAgentTask({
+        chat_id: chatId,
+        goal: queryText,
+        status: 'working',
+        task_history: localHistory
+    });
+
     return {
-        thought: 'Hit max iterations in chat mode.',
-        decision: 'WAIT_FOR_USER',
-        message_to_telegram: '⚠️ I took too many steps. Please simplify your request.'
+        thought: 'Hit chat mode iteration threshold. Escalating smoothly to an autonomous task to prevent timeout and complete the goal.',
+        decision: 'CONTINUE',
+        message_to_telegram: "This requires some deep focus. I am moving this task to the background and will execute it step-by-step until it's complete, without any limits."
     };
 }
