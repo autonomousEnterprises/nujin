@@ -26,19 +26,35 @@ export const webvisitTool: BuiltinTool = {
             const html = await response.text();
             const $ = cheerio.load(html);
 
-            // Remove script, style, and navigation tags to clean up the content
-            $('script, style, noscript, nav, header, footer').remove();
+            // Remove non-content tags
+            $('script, style, noscript').remove();
+
+            // Convert links to Markdown-style [text](url) before extracting text
+            $('a').each((_i, el) => {
+                const $el = $(el);
+                const href = $el.attr('href');
+                const text = $el.text().replace(/\s+/g, ' ').trim();
+                if (href && text) {
+                    // Handle relative URLs
+                    try {
+                        const absoluteUrl = new URL(href, url).href;
+                        $el.replaceWith(` [${text}](${absoluteUrl}) `);
+                    } catch {
+                        $el.replaceWith(` [${text}](${href}) `);
+                    }
+                }
+            });
 
             // Extract text and compress multiple spaces/newlines
             const text = $('body').text().replace(/\s+/g, ' ').trim();
 
-            // Truncate text if it's too long to avoid token limits (approx 8000 chars)
-            const maxLength = 8000;
+            // Truncate text if it's too long to avoid token limits (approx 12000 chars now)
+            const maxLength = 12000;
             if (text.length > maxLength) {
                 return text.substring(0, maxLength) + '... [TRUNCATED]';
             }
 
-            return text || 'No visible text content found on the page.';
+            return text || 'No visible content found on the page.';
         } catch (e: any) {
             return `Failed to visit website: ${e.message}`;
         }

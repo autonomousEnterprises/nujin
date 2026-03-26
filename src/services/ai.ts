@@ -98,13 +98,34 @@ export async function runAgentLoop(
             break;
         }
 
+        // Detect repetition and provide a nudge if the agent is stuck in a loop
+        let repetitionNudge = '';
+        if (localHistory.length >= 2) {
+            const last = localHistory[localHistory.length - 1];
+            const prev = localHistory[localHistory.length - 2];
+            // Identify redundant tool calls: same action, same arguments, and same exact result.
+            // This is a much better indicator of being "stuck" than just comparing thoughts.
+            const sameAction = last?.action && last.action === prev?.action;
+            const sameArgs = JSON.stringify(last?.action_args) === JSON.stringify(prev?.action_args);
+            const sameResult = last?.result && last.result === prev?.result;
+
+            if (sameAction && sameArgs && sameResult) {
+                repetitionNudge = "\n\n--- INTERNAL SYSTEM ALERT: REPETITION DETECTED ---\n" +
+                    "You have just repeated the same action with the same arguments and got the same result. This indicates you might be stuck. " +
+                    "Please: \n1. Re-analyze the tool results - are you missing something (like a link you need to visit or a specific detail)?\n" +
+                    "2. Try a different search query or a different URL.\n" +
+                    "3. If you truly cannot proceed, ask the user for clarification instead of repeating yourself.";
+            }
+        }
+
         const userContent = JSON.stringify({
             goal: task?.goal || '(standard chat - no active goal)',
             recent_chat_history: chatHistory || '(no previous messages)',
             relevant_longterm_memory: relevantPastContext || '(no relevant past memory found)',
             task_history: localHistory,
             available_tools: toolDocs,
-            mode: task ? 'AUTONOMOUS' : 'CHAT'
+            mode: task ? 'AUTONOMOUS' : 'CHAT',
+            _system_nudge: repetitionNudge || undefined
         });
 
         let raw: string;
@@ -163,10 +184,13 @@ export async function runAgentLoop(
         }
 
         // Update local history
-        const historyEntry: { thought: string; action?: string; result?: string } = {
+        const historyEntry: { thought: string; action?: string; action_args?: Record<string, any>; result?: string } = {
             thought: parsed.thought
         };
-        if (parsed.tool_to_call) historyEntry.action = parsed.tool_to_call;
+        if (parsed.tool_to_call) {
+            historyEntry.action = parsed.tool_to_call;
+            historyEntry.action_args = parsed.tool_args || {};
+        }
         if (toolResult !== undefined) historyEntry.result = toolResult;
         localHistory.push(historyEntry);
 

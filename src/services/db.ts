@@ -231,7 +231,7 @@ export interface AgentTask {
   chat_id: number;
   status: 'idle' | 'working' | 'awaiting_user' | 'processing';
   goal?: string | null;
-  task_history: Array<{ thought: string; action?: string; result?: string }>;
+  task_history: Array<{ thought: string; action?: string; action_args?: Record<string, any>; result?: string }>;
   updated_at?: string;
 }
 
