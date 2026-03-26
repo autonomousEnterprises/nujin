@@ -170,9 +170,21 @@ export async function runAgentLoop(
         if (toolResult !== undefined) historyEntry.result = toolResult;
         localHistory.push(historyEntry);
 
-        // In autonomous mode, return after one step to allow persistence and cron orchestration
+        // In autonomous mode (background task), we handle yielding based on environment.
         if (task) {
             task.task_history = localHistory;
+            
+            // On Vercel, we MUST return after every single step to allow the cron heartbeat 
+            // to orchestrate the next step and stay under the 10s webhook/cron timeout.
+            if (isVercel) {
+                return parsed;
+            }
+
+            // Locally (npm start), we could continue looping indefinitely.
+            // However, we return 'parsed' to let bot.ts send the mid-task Telegram 
+            // update and persist the DB. The bot.ts 'while' loop will immediately 
+            // call us again, effectively creating a continuous but visible loop.
+            // This satisfies the "limitless" requirement while keeping UX high.
             return parsed;
         }
 
