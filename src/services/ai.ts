@@ -2,7 +2,7 @@ import OpenAI from 'openai';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { getDynamicTools, saveDynamicTool, getDynamicSkills, saveDynamicSkill, getChatHistory } from './db.js';
+import { getDynamicTools, saveDynamicTool, getDynamicSkills, saveDynamicSkill, getChatHistory, searchChatHistory, searchAgentMemories } from './db.js';
 import type { AgentTask } from './db.js';
 import { executeDynamicTool } from './tools.js';
 import { builtinTools } from '../tools/index.js';
@@ -47,7 +47,7 @@ export async function runAgentLoop(
     logger.info({ chatId, status: task?.status, goal: task?.goal }, 'Running agent loop');
 
     const dynamicTools = await getDynamicTools();
-    const chatHistoryReversed = await getChatHistory(chatId, 10);
+    const chatHistoryReversed = await getChatHistory(chatId, 50);
     const chatHistory = chatHistoryReversed.map(m => `[${m.role.toUpperCase()}]: ${m.content}`).join('\n');
 
     const toolDocs = [
@@ -63,6 +63,29 @@ export async function runAgentLoop(
         }))
     ];
 
+    let queryText = task?.goal || '';
+    if (!queryText) {
+        const latestUserMsg = chatHistoryReversed.find(m => m.role === 'user');
+        queryText = latestUserMsg?.content || '';
+    }
+
+    let relevantPastContext = '';
+    if (queryText) {
+        // Find top 5 relevant older messages
+        const relevantChats = await searchChatHistory(chatId, queryText, 5, 0.4);
+        if (relevantChats.length > 0) {
+            relevantPastContext += '--- RELEVANT PAST CHAT MESSAGES ---\n' + 
+                relevantChats.map(m => `[${m.role.toUpperCase()}] (Score: ~sim): ${m.content}`).join('\n') + '\n\n';
+        }
+
+        // Find top 3 relevant declarative memories
+        const relevantMemories = await searchAgentMemories(chatId, queryText, 3, 0.4);
+        if (relevantMemories.length > 0) {
+            relevantPastContext += '--- EXPLICIT CORE MEMORIES ---\n' + 
+                relevantMemories.map(m => `Topic: ${m.topic}\nContent: ${m.content}`).join('\n') + '\n\n';
+        }
+    }
+
     const maxChatIterations = 5;
     let iterations = 0;
     const localHistory = task ? [...task.task_history] : [];
@@ -73,6 +96,7 @@ export async function runAgentLoop(
         const userContent = JSON.stringify({
             goal: task?.goal || '(standard chat - no active goal)',
             recent_chat_history: chatHistory || '(no previous messages)',
+            relevant_longterm_memory: relevantPastContext || '(no relevant past memory found)',
             task_history: localHistory,
             available_tools: toolDocs,
             mode: task ? 'AUTONOMOUS' : 'CHAT'

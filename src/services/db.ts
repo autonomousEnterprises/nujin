@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import * as dotenv from 'dotenv';
 import { logger } from './logger.js';
+import { generateEmbedding } from './embeddings.js';
 dotenv.config();
 
 const supabaseUrl = process.env.SUPABASE_URL || '';
@@ -17,6 +18,7 @@ export interface ChatMessage {
   chat_id: number;
   role: 'system' | 'user' | 'assistant' | 'tool';
   content: string;
+  embedding?: number[] | null;
   created_at?: string;
 }
 
@@ -63,10 +65,80 @@ export async function getChatHistory(chatId: number, limit = 20): Promise<ChatMe
 }
 
 export async function saveChatMessage(message: ChatMessage): Promise<void> {
+  if (!message.embedding && message.content && (message.role === 'user' || message.role === 'assistant')) {
+    try {
+      message.embedding = await generateEmbedding(message.content);
+    } catch (e) {
+      logger.error('Failed to generate embedding for chat message');
+    }
+  }
   const { error } = await supabase.from('chat_history').insert([message]);
   if (error) {
     logger.error({ error, message }, 'Error saving chat message');
   }
+}
+
+export async function searchChatHistory(chatId: number, queryText: string, matchCount: number = 5, matchThreshold: number = 0.5): Promise<ChatMessage[]> {
+    const queryEmbedding = await generateEmbedding(queryText);
+    if (!queryEmbedding) return [];
+
+    const { data, error } = await supabase.rpc('match_chat_history', {
+        query_embedding: queryEmbedding,
+        match_threshold: matchThreshold,
+        match_count: matchCount,
+        p_chat_id: chatId
+    });
+
+    if (error) {
+        logger.error({ error, chatId }, 'Error searching chat history');
+        return [];
+    }
+    return data as ChatMessage[];
+}
+
+export interface AgentMemory {
+  id?: string;
+  chat_id: number;
+  topic: string;
+  content: string;
+  embedding?: number[] | null;
+  created_at?: string;
+}
+
+export async function saveAgentMemory(memory: AgentMemory): Promise<boolean> {
+  if (!memory.embedding && memory.content) {
+    try {
+      const embedText = `${memory.topic}: ${memory.content}`;
+      memory.embedding = await generateEmbedding(embedText);
+    } catch (e) {
+      logger.error('Failed to generate embedding for agent memory');
+    }
+  }
+
+  const { error } = await supabase.from('agent_memories').insert([memory]);
+  if (error) {
+    logger.error({ error, memory }, 'Error saving agent memory');
+    return false;
+  }
+  return true;
+}
+
+export async function searchAgentMemories(chatId: number, queryText: string, matchCount: number = 5, matchThreshold: number = 0.5): Promise<AgentMemory[]> {
+    const queryEmbedding = await generateEmbedding(queryText);
+    if (!queryEmbedding) return [];
+
+    const { data, error } = await supabase.rpc('match_agent_memories', {
+        query_embedding: queryEmbedding,
+        match_threshold: matchThreshold,
+        match_count: matchCount,
+        p_chat_id: chatId
+    });
+
+    if (error) {
+        logger.error({ error, chatId }, 'Error searching agent memories');
+        return [];
+    }
+    return data as AgentMemory[];
 }
 
 export async function getDynamicTools(): Promise<DynamicTool[]> {

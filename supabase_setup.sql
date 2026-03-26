@@ -82,3 +82,89 @@ CREATE TABLE IF NOT EXISTS agent_tasks (
 ALTER TABLE agent_tasks ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Allow all access" ON agent_tasks;
 CREATE POLICY "Allow all access" ON agent_tasks FOR ALL USING (true);
+
+-- 7. Retrieval-Augmented Generation (RAG) Setup
+-- Enable the pgvector extension to work with embedding vectors
+create extension if not exists vector;
+
+-- Add vector column to existing chat_history table
+alter table chat_history
+add column if not exists embedding vector(1536);
+
+-- Create the exact agent_memories table for declarative storage (skills/facts)
+create table if not exists agent_memories (
+  id uuid primary key default gen_random_uuid(),
+  chat_id bigint not null,
+  topic text not null,
+  content text not null,
+  embedding vector(1536),
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- Index the declarative memory table
+create index if not exists agent_memories_embedding_idx on agent_memories
+using ivfflat (embedding vector_cosine_ops)
+with (lists = 100);
+
+-- Index the chat history
+create index if not exists chat_history_embedding_idx on chat_history
+using ivfflat (embedding vector_cosine_ops)
+with (lists = 100);
+
+-- Create a function to search chat_history via Supabase RPC
+create or replace function match_chat_history (
+  query_embedding vector(1536),
+  match_threshold float,
+  match_count int,
+  p_chat_id bigint
+)
+returns table (
+  id uuid,
+  chat_id bigint,
+  role text,
+  content text,
+  similarity float
+)
+language sql stable
+as $$
+  select
+    chat_history.id,
+    chat_history.chat_id,
+    chat_history.role,
+    chat_history.content,
+    1 - (chat_history.embedding <=> query_embedding) as similarity
+  from chat_history
+  where chat_history.chat_id = p_chat_id
+    and 1 - (chat_history.embedding <=> query_embedding) > match_threshold
+  order by similarity desc
+  limit match_count;
+$$;
+
+-- Create a function to search agent_memories via Supabase RPC
+create or replace function match_agent_memories (
+  query_embedding vector(1536),
+  match_threshold float,
+  match_count int,
+  p_chat_id bigint
+)
+returns table (
+  id uuid,
+  chat_id bigint,
+  topic text,
+  content text,
+  similarity float
+)
+language sql stable
+as $$
+  select
+    agent_memories.id,
+    agent_memories.chat_id,
+    agent_memories.topic,
+    agent_memories.content,
+    1 - (agent_memories.embedding <=> query_embedding) as similarity
+  from agent_memories
+  where agent_memories.chat_id = p_chat_id
+    and 1 - (agent_memories.embedding <=> query_embedding) > match_threshold
+  order by similarity desc
+  limit match_count;
+$$;
