@@ -83,30 +83,41 @@ bot.on('message:text', async (ctx) => {
                 task_history: task.task_history
             });
 
-            // Run one iteration of the agent loop
-            const decision = await runAgentLoop(chatId, task);
+            const isLocal = process.env.VERCEL !== '1';
+            let currentStatus: 'working' | 'idle' | 'awaiting_user' | 'processing' = 'working';
+            let currentTask = task;
 
-            // Update task status and persist results
-            const newStatus =
-                decision.decision === 'CONTINUE' ? 'working'
-                    : decision.decision === 'WAIT_FOR_USER' ? 'awaiting_user'
-                        : 'idle'; // FINISH
+            while (currentStatus === 'working') {
+                // Run one iteration of the agent loop
+                const decision = await runAgentLoop(chatId, currentTask);
 
-            await upsertAgentTask({
-                chat_id: chatId,
-                status: newStatus,
-                goal: newStatus === 'idle' ? null : (task.goal ?? null),
-                task_history: newStatus === 'idle' ? [] : task.task_history
-            });
+                // Update task status and persist results
+                currentStatus =
+                    decision.decision === 'CONTINUE' ? 'working'
+                        : decision.decision === 'WAIT_FOR_USER' ? 'awaiting_user'
+                            : 'idle'; // FINISH
 
-            // Deliver response
-            await ctx.reply(decision.message_to_telegram);
-            if (decision.message_to_telegram) {
-                await saveChatMessage({
+                await upsertAgentTask({
                     chat_id: chatId,
-                    role: 'assistant',
-                    content: decision.message_to_telegram
+                    status: currentStatus,
+                    goal: currentStatus === 'idle' ? null : (currentTask.goal ?? null),
+                    task_history: currentStatus === 'idle' ? [] : currentTask.task_history
                 });
+
+                // Deliver response
+                if (decision.message_to_telegram) {
+                    await ctx.reply(decision.message_to_telegram);
+                    await saveChatMessage({
+                        chat_id: chatId,
+                        role: 'assistant',
+                        content: decision.message_to_telegram
+                    });
+                }
+
+                if (!isLocal) {
+                    // In Vercel, break the loop and let cron handle further steps to avoid webhook timeout
+                    break;
+                }
             }
         } else {
             // mode: CHAT (standard conversational mode)
@@ -132,3 +143,50 @@ bot.on('message:text', async (ctx) => {
 
 // Re-export system prompt for legacy compatibility
 export { SYSTEM_PROMPT };
+
+// If not running on Vercel, start long-polling and process any working tasks
+if (process.env.VERCEL !== '1') {
+    bot.start({
+        onStart: (botInfo) => {
+            logger.info(`Bot @${botInfo.username} started in local long-polling mode.`);
+        }
+    });
+
+    // On startup, check for any 'working' tasks and resume loop for them immediately
+    import('./services/db.js').then(async ({ getWorkingTasks }) => {
+        try {
+            const workingTasks = await getWorkingTasks();
+            for (const task of workingTasks) {
+                const chatId = task.chat_id;
+                let currentStatus: 'working' | 'idle' | 'awaiting_user' | 'processing' = task.status;
+                let currentTask = task;
+                
+                while (currentStatus === 'working') {
+                    const decision = await runAgentLoop(chatId, currentTask);
+                    currentStatus =
+                        decision.decision === 'CONTINUE' ? 'working'
+                            : decision.decision === 'WAIT_FOR_USER' ? 'awaiting_user'
+                                : 'idle';
+
+                    await upsertAgentTask({
+                        chat_id: chatId,
+                        status: currentStatus,
+                        goal: currentStatus === 'idle' ? null : (currentTask.goal ?? null),
+                        task_history: currentStatus === 'idle' ? [] : currentTask.task_history
+                    });
+
+                    if (decision.message_to_telegram) {
+                        await bot.api.sendMessage(chatId, decision.message_to_telegram);
+                        await saveChatMessage({
+                            chat_id: chatId,
+                            role: 'assistant',
+                            content: decision.message_to_telegram
+                        });
+                    }
+                }
+            }
+        } catch (err) {
+            logger.error({ err }, 'Error checking working tasks on startup');
+        }
+    });
+}
