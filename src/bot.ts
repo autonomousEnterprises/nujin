@@ -13,6 +13,21 @@ if (!token) {
 
 export const bot = new Bot(token);
 
+// ─── Access Control ───────────────────────────────────────────────────────────
+// Only users in this set may interact with the agent.
+// Everyone else receives the invite-only message.
+const AUTHORIZED_USER_IDS = new Set<number>([
+    371427124 // @Christonomous
+]);
+
+const INVITE_ONLY_MSG =
+    '🔒 This AI Agent is invite only.\n' +
+    'Reach out to @Christonomous and ask for permission to access it.';
+
+function isAuthorized(userId: number | undefined): boolean {
+    return userId !== undefined && AUTHORIZED_USER_IDS.has(userId);
+}
+
 // Global error handler for the bot
 bot.catch((err) => {
     const ctx = err.ctx;
@@ -42,10 +57,18 @@ process.on('uncaughtException', (error) => {
 });
 
 bot.command('start', (ctx) => {
+    if (!isAuthorized(ctx.from?.id)) {
+        return ctx.reply(INVITE_ONLY_MSG);
+    }
     ctx.reply("Hi, I am Nujin, the world's first autonomous onchain AI dedicated to your sovereignty.\n\nI'm designed to generate your living while you enjoy yours. I can build my own tools, interact with the blockchain, and proactively pursue your financial goals.\n\nWhat's your financial goal?");
 });
 
 bot.on('message:text', async (ctx) => {
+    // Gate: only authorized users may proceed
+    if (!isAuthorized(ctx.from?.id)) {
+        return ctx.reply(INVITE_ONLY_MSG);
+    }
+
     const chatId = ctx.chat.id;
     const userText = ctx.message.text;
 
