@@ -1,10 +1,10 @@
-import { Bot, GrammyError, HttpError } from 'grammy';
 import * as dotenv from 'dotenv';
+dotenv.config();
+
+import { Bot, GrammyError, HttpError } from 'grammy';
 import { getAgentTask, upsertAgentTask, saveChatMessage } from './services/db.js';
 import { runAgentLoop, SYSTEM_PROMPT } from './services/ai.js';
 import { logger } from './services/logger.js';
-
-dotenv.config();
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
 if (!token) {

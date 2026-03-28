@@ -11,6 +11,7 @@ import { logger } from './logger.js';
 
 const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
+    baseURL: process.env.BASE_URL || process.env.OPENAI_BASE_URL,
 });
 
 const __filename = fileURLToPath(import.meta.url);
