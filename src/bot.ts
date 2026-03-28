@@ -17,7 +17,7 @@ export const bot = new Bot(token);
 // Only users in this set may interact with the agent.
 // Everyone else receives the invite-only message.
 const AUTHORIZED_USER_IDS = new Set<number>([
-    371427124 // @Christonomous
+    // 371427124 // @Christonomous
 ]);
 
 const INVITE_ONLY_MSG =
@@ -97,7 +97,7 @@ bot.on('message:text', async (ctx) => {
                 thought: `User replied: ${userText}`
             });
             task.status = 'working';
-            
+
             // Persist state before running the loop
             await upsertAgentTask({
                 chat_id: chatId,
@@ -183,7 +183,7 @@ if (process.env.VERCEL !== '1') {
                 const chatId = task.chat_id;
                 let currentStatus: 'working' | 'idle' | 'awaiting_user' | 'processing' = task.status;
                 let currentTask = task;
-                
+
                 while (currentStatus === 'working') {
                     const decision = await runAgentLoop(chatId, currentTask);
                     currentStatus =
