@@ -17,7 +17,7 @@ export const bot = new Bot(token);
 // Only users in this set may interact with the agent.
 // Everyone else receives the invite-only message.
 const AUTHORIZED_USER_IDS = new Set<number>([
-    // 371427124 // @Christonomous
+    371427124 // @Christonomous
 ]);
 
 const INVITE_ONLY_MSG =
